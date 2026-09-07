@@ -1,0 +1,145 @@
+{
+  "name": "408-study-journal",
+  "private": true,
+  "version": "0.1.6",
+  "description": "Offline-first learning journal with spaced repetition, structured notes, cloud sync, and optional AI-assisted review.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/a1234tuan/StudyJournal.git"
+  },
+  "bugs": {
+    "url": "https://github.com/a1234tuan/StudyJournal/issues"
+  },
+  "homepage": "https://github.com/a1234tuan/StudyJournal#readme",
+  "keywords": [
+    "learning-journal",
+    "spaced-repetition",
+    "offline-first",
+    "react",
+    "capacitor",
+    "electron"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "web:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-web.ps1",
+    "build": "tsc -b && vite build",
+    "desktop:icon": "node scripts/create-desktop-icon.cjs",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:build": "npm run desktop:icon && npm run build && electron-builder --win nsis",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:firebase": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-firebase-emulator.ps1",
+    "test:watch": "vitest",
+    "android:add": "cap add android",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:build:debug": "npm run android:sync && powershell -ExecutionPolicy Bypass -File scripts/android-debug-build.ps1",
+    "android:build:release": "npm run android:sync && powershell -ExecutionPolicy Bypass -File scripts/android-release-build.ps1",
+    "postinstall": "patch-package"
+  },
+  "dependencies": {
+    "@capacitor-firebase/authentication": "^8.3.0",
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/clipboard": "^8.0.1",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/share": "^8.0.1",
+    "@capawesome/capacitor-file-picker": "^8.0.2",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@noble/hashes": "^1.8.0",
+    "@tiptap/extension-code-block-lowlight": "^2.11.5",
+    "@tiptap/extension-placeholder": "^2.11.5",
+    "@tiptap/extension-task-item": "^2.11.5",
+    "@tiptap/extension-task-list": "^2.11.5",
+    "@tiptap/pm": "^2.11.5",
+    "@tiptap/react": "^2.11.5",
+    "@tiptap/starter-kit": "^2.11.5",
+    "date-fns": "^4.1.0",
+    "dexie": "^4.0.11",
+    "file-saver": "^2.0.5",
+    "firebase": "^12.17.1",
+    "highlight.js": "^11.11.1",
+    "idb-keyval": "^6.2.2",
+    "jszip": "^3.10.1",
+    "katex": "^0.16.22",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^0.468.0",
+    "markdown-it": "^14.3.0",
+    "mermaid": "11.16.1",
+    "nanoid": "^5.0.9",
+    "prosemirror-history": "1.5.0",
+    "prosemirror-markdown": "^1.13.5",
+    "prosemirror-search": "1.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "recharts": "^2.15.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "ts-fsrs": "^5.4.1"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^43.2.0",
+    "electron-builder": "26.0.12",
+    "fake-indexeddb": "^6.2.5",
+    "firebase-tools": "^15.29.0",
+    "jsdom": "^25.0.1",
+    "patch-package": "^8.0.0",
+    "png-to-ico": "^2.1.0",
+    "sharp": "^0.34.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.6",
+    "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^2.1.8"
+  },
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "com.noteproject.study408.desktop",
+    "productName": "学习日志",
+    "directories": {
+      "output": "release/desktop"
+    },
+    "files": [
+      "dist/**",
+      "desktop/**",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "include": "desktop/installer.nsh",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "学习日志"
+    }
+  }
+}

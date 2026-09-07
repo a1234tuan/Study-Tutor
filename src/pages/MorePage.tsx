@@ -1,0 +1,139 @@
+import { BarChart3, BookOpen, BrainCircuit, Download, FileText, Headphones, Layers3, LayoutTemplate, Mic2, Settings, Trash2 } from "lucide-react";
+
+import type { AppSettings, AutoBackupSettings } from "../types";
+import { createDefaultAiPresets } from "../db/defaults";
+import { getCurrentAiProvider, normalizeAiConfig } from "../lib/aiProviders";
+import { formatBytes } from "../lib/format";
+import { ListRow, PageHeader } from "../components/ui";
+
+interface MorePageProps {
+  onOpenBackup: () => void;
+  onOpenAi: () => void;
+  onOpenOcrSettings: () => void;
+  onOpenPodcasts: () => void;
+  onOpenStats: () => void;
+  onOpenSettings: () => void;
+  onOpenTrash: () => void;
+  onOpenRecordings?: () => void;
+  onOpenTemplates: () => void;
+  onOpenCategories: () => void;
+  onOpenGuide: () => void;
+  settings: AppSettings;
+  autoBackupState?: AutoBackupSettings;
+}
+
+const formatBackupTime = (value?: string): string =>
+  value ? new Date(value).toLocaleString([], { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "尚未备份";
+
+const buildBackupMeta = (state?: AutoBackupSettings): string => {
+  const enabled = state?.enabled ? "已开启" : "未开启";
+  const time = formatBackupTime(state?.lastBackupAt);
+  const size = state?.lastBackupSize ? ` · ${formatBytes(state.lastBackupSize)}` : "";
+  return `${enabled} · ${time}${size}`;
+};
+
+const buildBackupDescription = (state?: AutoBackupSettings): string => {
+  return state?.folderName ? `备份位置：${state.folderName}` : "管理数据备份、恢复导入和自动备份设置";
+};
+
+const buildAiMeta = (settings: AppSettings): string => {
+  const config = normalizeAiConfig(
+    settings.ai,
+    settings.ai?.presets?.length ? settings.ai.presets : createDefaultAiPresets(),
+  );
+  const currentProvider = getCurrentAiProvider(config);
+  if (!currentProvider) {
+    return "未配置供应商";
+  }
+  return currentProvider.model
+    ? `${currentProvider.providerName} · ${currentProvider.model}`
+    : currentProvider.providerName;
+};
+
+export const MorePage = ({
+  onOpenBackup,
+  onOpenAi,
+  onOpenOcrSettings,
+  onOpenPodcasts,
+  onOpenStats,
+  onOpenSettings,
+  onOpenTrash,
+  onOpenRecordings = () => undefined,
+  onOpenTemplates,
+  onOpenCategories,
+  onOpenGuide,
+  settings,
+  autoBackupState,
+}: MorePageProps) => (
+  <main className="page more-page">
+    <PageHeader
+      eyebrow="More"
+      title="更多"
+      subtitle="备份、AI 工具和应用入口集中在这里，常用信息保持一屏可扫。"
+      density="compact"
+    />
+
+    <section className="more-section more-hub-section">
+      <h2>工具</h2>
+      <div className="more-list">
+        <ListRow
+          className="more-summary-row"
+          icon={<BrainCircuit size={19} />}
+          title="AI 问答"
+          description="直接进入 AI 问答界面"
+          meta={buildAiMeta(settings)}
+          onClick={onOpenAi}
+        />
+        <ListRow
+          className="more-summary-row"
+          icon={<Headphones size={19} />}
+          title="知识播客"
+          description="把本地记录整理成可编辑、可回溯的知识音频"
+          onClick={onOpenPodcasts}
+        />
+        <ListRow
+          className="more-summary-row"
+          icon={<FileText size={19} />}
+          title="OCR 设置"
+          description="配置 PaddleOCR，用于图片全文检索和 AI 图片问答"
+          meta="PaddleOCR"
+          onClick={onOpenOcrSettings}
+        />
+      </div>
+    </section>
+
+    <section className="more-section more-hub-section">
+      <h2>应用</h2>
+      <div className="more-list">
+        <ListRow icon={<Layers3 size={19} />} title="分类管理" description="按学科和标签浏览，并管理学科" onClick={onOpenCategories} />
+        <ListRow icon={<Mic2 size={19} />} title="录音库" description="集中查看、播放和整理录音笔记" onClick={onOpenRecordings} />
+        <ListRow icon={<LayoutTemplate size={19} />} title="模板" description="管理可复用的学习记录内容" onClick={onOpenTemplates} />
+        <ListRow icon={<BarChart3 size={19} />} title="统计" description="查看记录趋势和资源数量" onClick={onOpenStats} />
+      </div>
+    </section>
+
+    <section className="more-section more-hub-section">
+      <h2>系统</h2>
+      <div className="more-list">
+        <ListRow
+          className="more-summary-row"
+          icon={<BookOpen size={19} />}
+          title="使用教程"
+          description="从记录、复习、AI 功能到备份恢复的基本指南"
+          meta="Guide"
+          onClick={onOpenGuide}
+        />
+        <ListRow
+          className="more-summary-row"
+          icon={<Download size={19} />}
+          title="备份与恢复"
+          description={buildBackupDescription(autoBackupState)}
+          meta={buildBackupMeta(autoBackupState)}
+          onClick={onOpenBackup}
+        />
+        <ListRow icon={<Trash2 size={19} />} title="回收站" description="恢复或永久删除 30 天内的记录" onClick={onOpenTrash} />
+        <ListRow icon={<Settings size={19} />} title="设置" description="目标日期、主题、字号和行距" onClick={onOpenSettings} />
+      </div>
+    </section>
+  </main>
+);

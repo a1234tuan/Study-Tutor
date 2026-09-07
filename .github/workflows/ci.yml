@@ -1,0 +1,47 @@
+name: CI
+
+env:
+  TZ: Asia/Shanghai
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit and component tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+      - name: Desktop and Android-narrow browser tests
+        run: npm run test:e2e -- --workers=1
+
+      - name: Firebase Emulator acceptance
+        run: npm run test:firebase
