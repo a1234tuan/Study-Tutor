@@ -15,7 +15,7 @@
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import type {
   AiProviderProfile,
@@ -50,6 +50,10 @@ import type { AnalysisQueueItem, DecisionBlockFeedback, FeedbackInterpretation }
 import type { AnalysisPlanningBlock } from "../features/reviewCoach/analysisPlanner";
 import type { ReviewCoachFormalSnapshot } from "../features/reviewCoach/domain";
 import { ReviewCoachWorkbench } from "../features/reviewCoach/ReviewCoachWorkbench";
+import type { ReviewSessionRuntimeState, ReviewUndoEntry, DecisionBlockFeedbackDraft } from "../features/reviewSession/runtime";
+import { ReviewAnnotationSurface } from "../features/reviewAnnotations/ReviewAnnotationSurface";
+import { reviewAnnotationRepository } from "../features/reviewAnnotations/repository";
+import { reviewOccurrenceKey } from "../features/reviewAnnotations/domain";
 
 interface ReviewPageProps {
   records: RecordBlock[];
@@ -77,6 +81,8 @@ interface ReviewPageProps {
     decisionBlockFeedback?: readonly RecordReviewDecisionBlockFeedbackInput[],
   ) => Promise<RecordReviewUndoToken | undefined>;
   onUndo: (token: RecordReviewUndoToken) => Promise<void>;
+  reviewRuntime?: ReviewSessionRuntimeState;
+  onReviewRuntimeChange?: Dispatch<SetStateAction<ReviewSessionRuntimeState>>;
   onDeleteDecisionBlockFeedback?: (feedbackId: string) => Promise<unknown>;
   onConfirmFeedbackInterpretation?: (feedbackId: string, patch?: Partial<Pick<FeedbackInterpretation, "actionability" | "difficultyType" | "stuckAt" | "userHypothesis" | "preferredPractice" | "missingInformation" | "confidence">>) => Promise<unknown>;
   onRetryFeedbackInterpretation?: (feedbackId: string) => Promise<unknown>;
@@ -128,21 +134,6 @@ interface ReviewDeckGroup {
   subject: string;
   records: RecordBlock[];
   tags: Array<{ tag: string; key: string; records: RecordBlock[] }>;
-}
-
-interface ReviewUndoEntry {
-  token: RecordReviewUndoToken;
-  queueIds: string[];
-  currentRecordId: string;
-  blockFeedbackDrafts: Record<string, DecisionBlockFeedbackDraft>;
-  dailyLimitIds: string[];
-  showAllDue: boolean;
-  reviewProgress: ReviewSessionProgress;
-}
-
-interface DecisionBlockFeedbackDraft {
-  comment: string;
-  includeInAnalysis: boolean;
 }
 
 const ratingConfig: Array<{ rating: RecordReviewRating; label: string; className: string }> = [
@@ -288,6 +279,8 @@ export const ReviewPage = ({
   onEnsureDay,
   onRate,
   onUndo,
+  reviewRuntime: controlledReviewRuntime,
+  onReviewRuntimeChange: controlledReviewRuntimeChange,
   onDeleteDecisionBlockFeedback,
   onConfirmFeedbackInterpretation,
   onRetryFeedbackInterpretation,
@@ -326,9 +319,12 @@ export const ReviewPage = ({
   const [localCoachOpen, setLocalCoachOpen] = useState(false);
   const coachOpen = controlledCoachOpen ?? localCoachOpen;
   const setCoachOpen = onCoachOpenChange ?? setLocalCoachOpen;
-  const [ratedRecordIds, setRatedRecordIds] = useState<Set<string>>(() => new Set());
+  const [localReviewRuntime, setLocalReviewRuntime] = useState<ReviewSessionRuntimeState>(() => ({ day: todayISO(), ratedRecordIds: [], undoHistory: [] }));
+  const reviewRuntime = controlledReviewRuntime ?? localReviewRuntime;
+  const onReviewRuntimeChange = controlledReviewRuntimeChange ?? setLocalReviewRuntime;
+  const ratedRecordIds = useMemo(() => new Set(reviewRuntime.ratedRecordIds), [reviewRuntime.ratedRecordIds]);
   const [ratingRecordId, setRatingRecordId] = useState<string | null>(null);
-  const [undoHistory, setUndoHistory] = useState<ReviewUndoEntry[]>([]);
+  const undoHistory = reviewRuntime.undoHistory;
   const [pendingUndoRestore, setPendingUndoRestore] = useState<ReviewUndoEntry | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [ratingError, setRatingError] = useState("");
@@ -574,10 +570,13 @@ export const ReviewPage = ({
   }, [currentRecordId, effectiveQueue, onCurrentRecordChange, onQueueChange, pendingUndoRestore, queueIds, queueReady, queuedDueReviews, recordMap, sessionProgress, updateSessionProgress]);
 
   useEffect(() => {
-    setRatedRecordIds(new Set());
-    setUndoHistory([]);
+    onReviewRuntimeChange((current) => current.day === today ? current : {
+      day: today,
+      ratedRecordIds: [],
+      undoHistory: [],
+    });
     setPendingUndoRestore(null);
-  }, [today]);
+  }, [onReviewRuntimeChange, today]);
 
   useEffect(() => {
     if (sessionDayRef.current === today) {
@@ -629,6 +628,7 @@ export const ReviewPage = ({
       return;
     }
     const ratedId = currentId;
+    const ratedOccurrenceKey = reviewOccurrenceKey(currentReview);
     const previousQueue = effectiveQueue;
     const previousCurrentId = currentId;
     const previousProgress = activeSessionProgress;
@@ -653,7 +653,12 @@ export const ReviewPage = ({
     });
     setRatingError("");
     setRatingRecordId(ratedId);
-    setRatedRecordIds((current) => new Set(current).add(ratedId));
+    onReviewRuntimeChange((current) => ({
+      ...current,
+      ratedRecordIds: current.ratedRecordIds.includes(ratedId)
+        ? current.ratedRecordIds
+        : [...current.ratedRecordIds, ratedId],
+    }));
     updateSessionProgress(nextProgress);
     onQueueChange(nextQueue);
     onCurrentRecordChange(nextQueue[0]);
@@ -662,9 +667,9 @@ export const ReviewPage = ({
         ? await onRate(ratedId, rating, feedbackInputs)
         : await onRate(ratedId, rating);
       if (token) {
-        setUndoHistory((current) => [
+        onReviewRuntimeChange((current) => ({
           ...current,
-          {
+          undoHistory: [...current.undoHistory, {
             token,
             queueIds: previousQueue,
             currentRecordId: previousCurrentId,
@@ -672,15 +677,19 @@ export const ReviewPage = ({
             dailyLimitIds,
             showAllDue,
             reviewProgress: previousProgress,
-          },
-        ]);
+          }],
+        }));
+        try {
+          await reviewAnnotationRepository.clearAfterRating(ratedId, ratedOccurrenceKey);
+        } catch (error) {
+          setRatingError(formatUiError(error, "review-annotation"));
+        }
       }
     } catch (error) {
-      setRatedRecordIds((current) => {
-        const next = new Set(current);
-        next.delete(ratedId);
-        return next;
-      });
+      onReviewRuntimeChange((current) => ({
+        ...current,
+        ratedRecordIds: current.ratedRecordIds.filter((id) => id !== ratedId),
+      }));
       updateSessionProgress(previousProgress);
       feedbackDraftRecordIdRef.current = previousCurrentId;
       setBlockFeedbackDrafts(submittedDrafts);
@@ -703,12 +712,13 @@ export const ReviewPage = ({
     setPendingUndoRestore(entry);
     try {
       await onUndo(entry.token);
-      setUndoHistory((current) => current.slice(0, -1));
-      setRatedRecordIds((current) => {
-        const next = new Set(current);
-        next.delete(entry.currentRecordId);
-        return next;
-      });
+      onReviewRuntimeChange((current) => ({
+        ...current,
+        undoHistory: current.undoHistory.at(-1)?.token.reviewLogId === entry.token.reviewLogId
+          ? current.undoHistory.slice(0, -1)
+          : current.undoHistory,
+        ratedRecordIds: current.ratedRecordIds.filter((id) => id !== entry.currentRecordId),
+      }));
       updateSessionProgress(entry.reviewProgress);
       feedbackDraftRecordIdRef.current = entry.currentRecordId;
       setBlockFeedbackDrafts(entry.blockFeedbackDrafts);
@@ -723,7 +733,7 @@ export const ReviewPage = ({
     } finally {
       setUndoing(false);
     }
-  }, [onCurrentRecordChange, onModeChange, onQueueChange, onUndo, pendingUndoRestore, ratingRecordId, undoHistory, undoing, updateSessionProgress]);
+  }, [onCurrentRecordChange, onModeChange, onQueueChange, onReviewRuntimeChange, onUndo, pendingUndoRestore, ratingRecordId, undoHistory, undoing, updateSessionProgress]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -798,12 +808,12 @@ export const ReviewPage = ({
 
   return (
     <main
-      className="page review-page"
+      className={`page review-page primary-workspace-page ${!coachOpen && mode === "queue" && currentRecord ? "review-page-session-active" : ""}`}
       onTouchStart={(event) => touchStart(event.touches[0]?.clientY ?? 0)}
       onTouchMove={(event) => touchMove(event.touches[0]?.clientY ?? 0)}
       onTouchEnd={touchEnd}
     >
-      <PageHeader
+      {(!currentRecord || mode !== "queue" || coachOpen) && <PageHeader
         title={coachOpen ? "学习助教" : "间隔复习"}
         subtitle={coachOpen ? "分析卡点、完成针对性训练，并在稍后验证是否真正掌握。" : `今日到期 ${todayCount} 条，已过期 ${overdueCount} 条`}
         density="compact"
@@ -882,11 +892,11 @@ export const ReviewPage = ({
             )}
           </div>
         )}
-      />
+      />}
       {pullReady && <p className="status-message">松手刷新复习列表</p>}
       {ratingError && <p className="status-message">{ratingError}</p>}
 
-      <div className="review-mode-tabs" role="tablist" aria-label="复习视图">
+      {(!currentRecord || mode !== "queue" || coachOpen) && <div className="review-mode-tabs" role="tablist" aria-label="复习视图">
         <button type="button" className={!coachOpen && mode === "queue" ? "active" : ""} onClick={() => { setCoachOpen(false); onModeChange("queue"); }}>
           日志复习
         </button>
@@ -896,7 +906,7 @@ export const ReviewPage = ({
         <button type="button" className={!coachOpen && mode === "manage" ? "active" : ""} onClick={() => { setCoachOpen(false); onModeChange("manage"); }}>
           卡片库
         </button>
-      </div>
+      </div>}
 
       {coachOpen && reviewCoachSnapshot && onRunDeepAnalysis && onResumeDeepAnalysis && onSwitchAdaptiveTask && onDeferAdaptiveTask && (
         <ReviewCoachWorkbench
@@ -959,15 +969,15 @@ export const ReviewPage = ({
           </section>
         ) : (
           <section className="review-session">
-            <button
-              type="button"
-              className="review-session-exit"
-              onClick={() => onModeChange("manage")}
-            >
-              <ArrowLeft size={18} />
-              返回复习
-            </button>
-            <section className="review-session-progress" aria-label="复习进度">
+            <section className="review-session-chrome" aria-label="复习进度">
+              <button
+                type="button"
+                className="review-session-exit"
+                onClick={() => onModeChange("manage")}
+              >
+                <ArrowLeft size={18} />
+                返回复习
+              </button>
               <div className="review-progress-meta">
                 <span>第 {currentIndex}/{reviewTotal} 条</span>
                 <strong>{currentReview?.nextReviewDate && currentReview.nextReviewDate < today ? "已过期" : "今日到期"}</strong>
@@ -982,6 +992,27 @@ export const ReviewPage = ({
               >
                 <span style={{ width: `${progressPercent}%` }} />
               </div>
+              <div className="review-header-menu review-session-menu" ref={headerMenuRef}>
+                <button
+                  type="button"
+                  className="review-header-menu-trigger"
+                  onClick={() => setHeaderMenuOpen((open) => !open)}
+                  aria-expanded={headerMenuOpen}
+                  aria-haspopup="menu"
+                  aria-label="打开复习更多菜单"
+                  title="更多复习操作"
+                >
+                  <MoreHorizontal size={19} />
+                </button>
+                {headerMenuOpen && <div className="review-header-menu-popover" role="menu" aria-label="复习操作">
+                  <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void undoLastRating(); }} disabled={undoHistory.length === 0 || Boolean(ratingRecordId) || undoing || Boolean(pendingUndoRestore)}>
+                    <Undo2 size={16} /><span>撤回上次评分</span><small>Ctrl+Z</small>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); void onRefresh(); }}><RefreshCw size={16} /><span>刷新复习列表</span></button>
+                  <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); onOpenStats?.(); }} disabled={!onOpenStats}><BarChart3 size={16} /><span>学习统计</span></button>
+                  <button type="button" role="menuitem" onClick={() => { setHeaderMenuOpen(false); onEditRecord(currentRecord); }}><Edit3 size={16} /><span>编辑</span></button>
+                </div>}
+              </div>
             </section>
             <article className={`review-record-card ${currentDecisionBlocks.length > 0 ? "has-decision-blocks" : ""}`}>
               <header className="record-view-header">
@@ -991,16 +1022,22 @@ export const ReviewPage = ({
                 <span className="review-record-meta">{currentRecord.subject} · {reviewKindLabel(currentReview?.reviewKind)}</span>
               </header>
               <div className={`review-learning-layout ${currentDecisionBlocks.length > 0 ? "has-decision-blocks" : ""}`}>
-                <RichTextEditor
-                  value={normalizeRecordContent(currentRecord)}
-                  onChange={() => undefined}
-                  placeholder=""
-                  readOnly
-                  currentRecordId={currentRecord.id}
-                  referenceRecords={referenceRecords}
-                  referenceSubjects={referenceSubjects}
-                  onOpenRecordReference={onOpenRecordReference ? (targetRecordId) => onOpenRecordReference(currentRecord.id, targetRecordId) : undefined}
-                />
+                <ReviewAnnotationSurface
+                  recordId={currentRecord.id}
+                  occurrenceKey={reviewOccurrenceKey(currentReview)}
+                  contentRevision={currentRecord.updatedAt}
+                >
+                  <RichTextEditor
+                    value={normalizeRecordContent(currentRecord)}
+                    onChange={() => undefined}
+                    placeholder=""
+                    readOnly
+                    currentRecordId={currentRecord.id}
+                    referenceRecords={referenceRecords}
+                    referenceSubjects={referenceSubjects}
+                    onOpenRecordReference={onOpenRecordReference ? (targetRecordId) => onOpenRecordReference(currentRecord.id, targetRecordId) : undefined}
+                  />
+                </ReviewAnnotationSurface>
                 {currentDecisionBlocks.length > 0 && (
                   <section className="decision-block-reflection-list" aria-label="复习重点评论">
                     <header>

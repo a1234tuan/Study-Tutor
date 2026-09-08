@@ -221,6 +221,7 @@ const createRestoreDb = (podcasts: KnowledgePodcast[] = [], assets: Asset[] = [p
   knowledgePodcasts: new MemoryTable<StoredRow>(podcasts),
   cloudSyncMutation: new MemoryTable<StoredRow>([{ id: "local", epoch: 0 }]),
   restoreStagingAssets: new MemoryTable<StoredRow>([], "stagingId"),
+  reviewAnnotationDrafts: new MemoryTable(),
   transaction: async (_mode: string, ...args: unknown[]) => {
     const callback = args.at(-1) as () => Promise<unknown>;
     return callback();

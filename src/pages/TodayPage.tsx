@@ -67,7 +67,7 @@ export const TodayPage = ({
   const selectedTemplate = templates.find((template) => template.id === templateId);
 
   return (
-    <main className="page today-page">
+    <main className="page today-page primary-workspace-page">
       <PageHeader
         eyebrow={formatChineseDate(today)}
         title="今天想记下什么？"

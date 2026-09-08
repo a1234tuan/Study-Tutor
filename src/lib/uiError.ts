@@ -2,6 +2,7 @@ export type UiErrorContext =
   | "review-rating"
   | "review-undo"
   | "review-feedback"
+  | "review-annotation"
   | "adaptive-review"
   | "record-save"
   | "ai-request"
@@ -17,6 +18,7 @@ const CONTEXT_MESSAGES: Record<UiErrorContext, string> = {
   "review-rating": "复习评分失败。当前复习内容仍保留，请重试。",
   "review-undo": "撤回评分失败。原评分仍然有效，请稍后重试。",
   "review-feedback": "暂时无法完成这项复习操作，请重试。",
+  "review-annotation": "批注暂时无法读取或保存。正文内容不受影响，请重试。",
   "adaptive-review": "暂时无法更新学习助教任务。当前回答仍保留在本页，请重试。",
   "record-save": "保存失败。内容已存于本机草稿，请重试。",
   "ai-request": "AI 暂时无法完成本次请求。你的提问已保留，可以重试。",

@@ -114,11 +114,12 @@ export const JournalPage = ({
   };
 
   return (
-    <main className="page journal-page">
+    <main className="page journal-page primary-workspace-page">
       <PageHeader
         eyebrow="学习记录"
         title="日志资料库"
         subtitle="浏览、分类和回看所有学习日志。"
+        density="compact"
         actions={(
           <button type="button" className="secondary-button journal-search-button" onClick={onOpenSearch} title="全局搜索" aria-label="全局搜索">
             <Search size={18} />

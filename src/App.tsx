@@ -53,6 +53,7 @@ import { exportRecordTransferPackage } from "./services/recordTransferService";
 import { storage } from "./services/storageAdapter";
 import { getFavoriteRecords } from "./lib/journalSelectors";
 import { todayISO } from "./lib/date";
+import { createReviewSessionRuntime } from "./features/reviewSession/runtime";
 import { isDesktopPlatform } from "./lib/platform";
 import { isKeyboardViewportVisible, nextKeyboardBaselineHeight, resolveViewportHeight } from "./lib/viewport";
 import { getCurrentAiProvider } from "./lib/aiProviders";
@@ -198,6 +199,7 @@ export const App = () => {
   const [backToast, setBackToast] = useState("");
   const [reviewToast, setReviewToast] = useState("");
   const [reviewCoachOpen, setReviewCoachOpen] = useState(false);
+  const [reviewRuntime, setReviewRuntime] = useState(() => createReviewSessionRuntime(todayISO()));
   const [desktopMigrationOpen, setDesktopMigrationOpen] = useState(false);
   const [visualTheme, setVisualTheme] = useState<VisualTheme>(() => readVisualTheme());
   const lastBackPressRef = useRef(0);
@@ -1361,6 +1363,8 @@ export const App = () => {
             onUndo={async (token) => {
               await app.undoRecordReview(token);
             }}
+            reviewRuntime={reviewRuntime}
+            onReviewRuntimeChange={setReviewRuntime}
             onDeleteDecisionBlockFeedback={app.deleteDecisionBlockFeedback}
             onConfirmFeedbackInterpretation={app.confirmFeedbackInterpretation}
             onRetryFeedbackInterpretation={app.retryFeedbackInterpretation}

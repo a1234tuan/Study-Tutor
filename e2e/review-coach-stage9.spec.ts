@@ -93,6 +93,7 @@ test.describe("Stage 9 Review Coach release path", () => {
     const errors = installDiagnostics(page);
     await page.goto("/?preview=stage5");
     await page.getByRole("button", { name: /^复习/ }).first().click();
+    await page.getByRole("button", { name: "返回复习", exact: true }).click();
     await page.getByRole("button", { name: "学习助教", exact: true }).click();
 
     await expect(page.getByRole("heading", { name: "复习助教" })).toBeVisible();
@@ -109,6 +110,7 @@ test.describe("Stage 9 Review Coach release path", () => {
     await mockDeepSeek(page);
     await page.goto("/?preview=stage6");
     await page.getByRole("button", { name: /^复习/ }).first().click();
+    await page.getByRole("button", { name: "返回复习", exact: true }).click();
     await page.getByRole("button", { name: "学习助教", exact: true }).click();
 
     await page.getByRole("button", { name: "继续训练" }).click();
@@ -128,6 +130,7 @@ test.describe("Stage 9 Review Coach release path", () => {
     await mockDeepSeek(page);
     await page.goto("/?preview=stage7");
     await page.getByRole("button", { name: /^复习/ }).first().click();
+    await page.getByRole("button", { name: "返回复习", exact: true }).click();
     await page.getByRole("button", { name: "学习助教", exact: true }).click();
 
     await page.getByRole("button", { name: "继续训练" }).click();

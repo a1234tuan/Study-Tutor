@@ -4,10 +4,19 @@
 
 - Canonical open-source branch: `main`. The pre-publication history remains in the legacy repository on `feature/review-effect-coach-v2`.
 - Product boundary: `docs/新的方案.md`.
-- Database version: schema 19. Store definitions live in `src/db/reviewCoachSchema.ts`; schema 19 finalizes confirmed legacy facts and removes the six old Coach projection/execution tables.
+- Database version: schema 20. Store definitions live in `src/db/reviewCoachSchema.ts`; schema 19 finalizes confirmed legacy facts and removes the six old Coach projection/execution tables, while schema 20 adds the device-local `reviewAnnotationDrafts` store.
 - AI cockpit implementation is complete: Stages 0-8 were completed and verified on 2026-09-07, and Stage 9 automated release acceptance is complete. Physical-device upgrade and controlled real-account Firebase quota sign-off remain release gates; do not describe the release itself as signed off until they pass.
 - Product UI migration is complete through final automated acceptance. `src/styles/visual-v2.css` is the active visual layer; `reading` is the default visual theme and `modern` is the alternative. The visual theme is device-local and independent from the existing light/dark/system setting; do not add it to the database or cloud-sync contract.
 - The UI migration preserves formal create/save/rating semantics and routes Review Coach through `Review -> Learning Coach`. All caught errors rendered by React pages/components must pass through `src/lib/uiError.ts`; `src/lib/uiErrorSurface.test.ts` prevents raw `error.message` regressions.
+- The 2026-09-08 review-workspace follow-up adds compact primary-page headers, process-lifetime cross-tab rating undo, and a first-stage read-only annotation surface. The annotation toolbar is viewport-fixed and dynamically avoids visible rating controls.
+
+## Review Annotation Boundaries
+
+- Review annotations wrap the read-only review editor and never mutate `RecordBlock.contentHtml`.
+- Drafts live only in `reviewAnnotationDrafts`. They are excluded from cloud sync, ZIP/streaming/native backup, knowledge export, and record transfer, and annotation writes must not mark a cloud mutation.
+- An unscored draft survives component unmounts, navigation changes, reloads, and app restarts on the same device. A successful rating clears the matching `(recordId, reviewOccurrenceKey)` draft; undoing that rating restores the card but never restores the old annotation.
+- Rating undo history belongs to the App-level `ReviewSessionRuntimeState`. It survives navigation while the App root remains mounted, but is not serialized into tab history, Dexie, backup, or sync.
+- The current annotation editor supports browsing, pen/highlighter/eraser, basic shapes, text/input/select elements, color, width, opacity, and annotation undo/redo. Selection transforms, grouping, z-order editing, orphan repair, and full Excalidraw parity remain future work; do not describe them as implemented.
 
 ## Review Coach Boundaries
 
@@ -51,7 +60,7 @@ git diff --check
 
 Use deterministic mocks in automated tests. Real AI providers are limited to explicit, controlled acceptance runs and must never replace deterministic CI coverage.
 
-The final UI acceptance baseline is `119` Vitest files / `796` tests, `30` Playwright tests across Desktop and Android-narrow projects, and `3` isolated Firebase Emulator tests. Physical Android keyboard/IME, system back, image gestures, real DeepSeek, and controlled real-account Firebase quota checks remain manual release gates.
+The current automated acceptance baseline is `119` Vitest files / `796` tests, `32` Playwright tests across Desktop and Android-narrow projects, and `3` isolated Firebase Emulator tests. Physical Android keyboard/IME, system back, image gestures, real DeepSeek, and controlled real-account Firebase quota checks remain manual release gates.
 
 For local Stage 3 UI acceptance, run `npm run build`, start `npm run preview -- --host 127.0.0.1 --port 4177`, and open `http://127.0.0.1:4177/?preview=stage3`. This localhost-only query seeds an isolated `BFS Stage3 Preview` record with an overdue review, block feedback, and an analysis-queue item; it is gated out of normal URLs and native shells.
 

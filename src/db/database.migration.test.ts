@@ -51,7 +51,8 @@ describe("StudyJournalDatabase review-coach migrations", () => {
 
     await database.open();
 
-    expect(database.verno).toBe(19);
+    expect(database.verno).toBe(20);
+    expect(database.tables.some((table) => table.name === "reviewAnnotationDrafts")).toBe(true);
     expect(await database.blocks.count()).toBe(1);
     expect(await database.recordReviewLogs.count()).toBe(1);
     expect(await database.decisionBlocks.count()).toBe(0);
@@ -71,7 +72,7 @@ describe("StudyJournalDatabase review-coach migrations", () => {
 
     await database.open();
 
-    expect(database.verno).toBe(19);
+    expect(database.verno).toBe(20);
     expect(await database.learningEvidence.count()).toBe(1);
     expect(await database.knowledgePoints.count()).toBe(2);
     expect(await database.recordKnowledgePointLinks.count()).toBe(1);
@@ -146,7 +147,7 @@ describe("StudyJournalDatabase review-coach migrations", () => {
       idempotencyKey: "verification-task", createdAt: "2026-09-07T08:00:00.000Z", updatedAt: "2026-09-07T08:00:00.000Z",
     });
 
-    expect(database.verno).toBe(19);
+    expect(database.verno).toBe(20);
     expect(await database.adaptiveReviewTasks.where("blueprintId").equals("blueprint-1").count()).toBe(2);
     database.close();
   });
@@ -177,7 +178,7 @@ describe("StudyJournalDatabase review-coach migrations", () => {
 
     const retried = new StudyJournalDatabase(name);
     await retried.open();
-    expect(retried.verno).toBe(19);
+    expect(retried.verno).toBe(20);
     expect(await retried.learningEvidence.count()).toBe(1);
     expect(await retried.coachMigrationBackups.get("schema-17")).toMatchObject({ status: "completed" });
     retried.close();

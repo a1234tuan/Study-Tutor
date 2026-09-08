@@ -41,12 +41,14 @@ for (const theme of ["reading", "modern"] as const) {
 
     await page.goto("/?preview=stage6");
     await page.getByRole("button", { name: /^复习/ }).first().click();
-    await expect(page.getByRole("button", { name: "日志复习", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "返回复习", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "日志复习", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "返回复习", exact: true }).click();
+    await expect(page.getByRole("button", { name: "日志复习", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "卡片库", exact: true })).toHaveClass(/active/);
     await page.getByRole("button", { name: "日志复习", exact: true }).click();
     await expect(page.getByRole("button", { name: "返回复习", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "返回复习", exact: true }).click();
     await page.getByRole("button", { name: "学习助教", exact: true }).click();
     await expect(page.getByRole("heading", { name: "学习助教" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "复习助教" })).toBeVisible();
@@ -69,3 +71,41 @@ for (const theme of ["reading", "modern"] as const) {
     expect(errors).toEqual([]);
   });
 }
+
+test("keeps rating undo across tabs and exposes annotation tools", async ({ page }) => {
+  await page.goto("/?preview=stage3");
+  await page.getByRole("button", { name: /^复习/ }).first().click();
+
+  const annotationEntry = page.getByRole("button", { name: "打开批注工具" });
+  await annotationEntry.click();
+  await expect(page.getByRole("button", { name: "关闭批注工具" })).toHaveAttribute("aria-pressed", "true");
+  const toolbar = page.getByRole("toolbar", { name: "批注工具栏" });
+  await expect(toolbar).toBeVisible();
+  await expect(page.getByRole("button", { name: "浏览", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTitle("画笔")).toBeVisible();
+  await page.getByRole("button", { name: "矩形", exact: true }).click();
+  await expect(page.getByRole("button", { name: "矩形", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "浏览", exact: true })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByText("当前：矩形", { exact: true })).toBeVisible();
+  await expect(page.getByTitle("输入框")).toBeVisible();
+  await expect(page.getByTitle("下拉选择")).toBeVisible();
+  const toolbarBox = await toolbar.boundingBox();
+  const viewport = page.viewportSize();
+  expect(toolbarBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(toolbarBox!.y).toBeGreaterThanOrEqual(0);
+  expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(viewport!.height);
+  const ratingBox = await page.locator(".review-bottom-controls").boundingBox();
+  if (ratingBox && ratingBox.y < viewport!.height && ratingBox.y + ratingBox.height > 0) {
+    expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(ratingBox.y);
+  }
+
+  await page.getByRole("button", { name: /良好/ }).click();
+  await page.getByRole("button", { name: "今天", exact: true }).click();
+  await page.getByRole("button", { name: /^复习/ }).first().click();
+  await page.getByRole("button", { name: "打开复习更多菜单" }).click();
+  const undo = page.getByRole("menuitem", { name: /撤回上次评分/ });
+  await expect(undo).toBeEnabled();
+  await undo.click();
+  await expect(page.getByRole("heading", { name: "BFS Stage3 Preview" })).toBeVisible();
+});

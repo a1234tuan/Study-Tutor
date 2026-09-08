@@ -1462,12 +1462,13 @@ export class DexieStorageAdapter implements StorageAdapter {
     const draft = await db.recordDrafts.get(blockId);
 
     await markCloudSyncMutation();
-    await db.transaction("rw", [db.blocks, db.recordDrafts, db.assets, db.studySessions, db.recordReviews, db.recordReviewLogs, ...reviewCoachFormalTables(db)], async () => {
+    await db.transaction("rw", [db.blocks, db.recordDrafts, db.assets, db.studySessions, db.recordReviews, db.recordReviewLogs, db.reviewAnnotationDrafts, ...reviewCoachFormalTables(db)], async () => {
       await db.blocks.delete(blockId);
       await db.recordDrafts.delete(blockId);
       await db.studySessions.where("blockId").equals(blockId).delete();
       await db.recordReviews.delete(blockId);
       await db.recordReviewLogs.where("recordId").equals(blockId).delete();
+      await db.reviewAnnotationDrafts.where("recordId").equals(blockId).delete();
       if (block.type === "record") {
         await purgeReviewCoachFactsForRecord(db, blockId);
         await this.cleanupOrphanAssetsForRecord(block, draft);
@@ -2051,7 +2052,7 @@ export class DexieStorageAdapter implements StorageAdapter {
   private async restoreSnapshotData(
     snapshot: StorageSnapshot,
     expectedEpoch?: number,
-    options: { preservePodcasts?: boolean; preserveLocalSettings?: boolean } = {},
+    options: { preservePodcasts?: boolean; preserveLocalSettings?: boolean; clearLocalAnnotationDrafts?: boolean } = {},
   ): Promise<void> {
     const restoredBlocks = normalizeSnapshotRecords(migrateBlocksToRecords(snapshot.payload.blocks));
     const restoredDrafts = normalizeSnapshotRecordDrafts(snapshot.payload.recordDrafts ?? snapshot.recordDrafts ?? []);
@@ -2079,6 +2080,7 @@ export class DexieStorageAdapter implements StorageAdapter {
         db.assets,
         db.knowledgePodcasts,
         db.cloudSyncMutation,
+        db.reviewAnnotationDrafts,
         ...reviewCoachRestoreTables(db),
       ],
       async () => {
@@ -2119,6 +2121,7 @@ export class DexieStorageAdapter implements StorageAdapter {
           db.settings.clear(),
           db.assets.clear(),
           db.knowledgePodcasts.clear(),
+          ...(options.clearLocalAnnotationDrafts ? [db.reviewAnnotationDrafts.clear()] : []),
         ]);
         await restoreReviewCoachFormalSnapshot(db, restoredReviewCoach);
         await Promise.all([
@@ -2144,7 +2147,7 @@ export class DexieStorageAdapter implements StorageAdapter {
   }
 
   async restoreSnapshot(snapshot: StorageSnapshot): Promise<void> {
-    await this.restoreSnapshotData(snapshot);
+    await this.restoreSnapshotData(snapshot, undefined, { clearLocalAnnotationDrafts: true });
   }
 
   async restoreCloudSyncSnapshot(snapshot: StorageSnapshot): Promise<void> {
@@ -2193,12 +2196,12 @@ export class DexieStorageAdapter implements StorageAdapter {
       await markCloudSyncMutation();
       await db.transaction(
         "rw",
-        [db.entries, db.blocks, db.templates, db.recordDrafts, db.recordReviews, db.recordReviewLogs, db.recordReviewDayStats, db.mistakes, db.tags, db.reviews, db.studySessions, db.settings, db.assets, db.knowledgePodcasts, db.restoreStagingAssets, ...reviewCoachRestoreTables(db)],
+        [db.entries, db.blocks, db.templates, db.recordDrafts, db.recordReviews, db.recordReviewLogs, db.recordReviewDayStats, db.mistakes, db.tags, db.reviews, db.studySessions, db.settings, db.assets, db.knowledgePodcasts, db.restoreStagingAssets, db.reviewAnnotationDrafts, ...reviewCoachRestoreTables(db)],
         async () => {
           await Promise.all([
             db.entries.clear(), db.blocks.clear(), db.templates.clear(), db.recordDrafts.clear(), db.recordReviews.clear(), db.recordReviewLogs.clear(),
             db.recordReviewDayStats.clear(), db.mistakes.clear(), db.tags.clear(), db.reviews.clear(), db.studySessions.clear(),
-            db.settings.clear(), db.assets.clear(), db.knowledgePodcasts.clear(),
+            db.settings.clear(), db.assets.clear(), db.knowledgePodcasts.clear(), db.reviewAnnotationDrafts.clear(),
           ]);
           await restoreReviewCoachFormalSnapshot(db, restoredReviewCoach);
           await Promise.all([

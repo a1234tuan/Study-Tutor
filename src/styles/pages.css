@@ -3711,3 +3711,301 @@
   .adaptive-review-secondary-actions { justify-content: stretch; }
   .adaptive-review-secondary-actions > button { flex: 1; }
 }
+.review-annotation-root {
+  position: relative;
+}
+
+.review-annotation-entry {
+  position: absolute;
+  z-index: 24;
+  top: 8px;
+  right: 8px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  background: var(--surface);
+  box-shadow: var(--shadow-floating);
+  transition: color var(--motion-fast) ease, background var(--motion-fast) ease, border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease;
+}
+
+.review-annotation-entry.active,
+.review-annotation-entry[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  color: var(--color-on-primary, #fff);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent), var(--shadow-floating);
+}
+
+.review-annotation-toolbar {
+  position: fixed;
+  z-index: 26;
+  right: auto;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  left: 50%;
+  top: auto;
+  width: min(860px, calc(100vw - 32px));
+  margin: 0;
+  transform: translateX(-50%);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow-floating);
+}
+
+.review-annotation-current {
+  flex: 0 0 auto;
+  min-width: 88px;
+  padding: 0 8px;
+  color: var(--color-muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.review-annotation-current strong {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.review-annotation-toolbar > button {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-muted);
+  background: transparent;
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+  transition: color var(--motion-fast) ease, background var(--motion-fast) ease, outline-color var(--motion-fast) ease;
+}
+
+.review-annotation-toolbar > button.active,
+.review-annotation-toolbar > button[aria-pressed="true"] {
+  color: var(--color-on-primary, #fff);
+  background: var(--color-primary);
+  outline-color: color-mix(in srgb, var(--color-primary) 72%, var(--color-text));
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, #fff 78%, transparent);
+}
+
+.review-annotation-toolbar > button:disabled {
+  opacity: 0.38;
+}
+
+.review-annotation-swatches {
+  display: flex;
+  gap: 5px;
+  padding-inline: 4px;
+}
+
+.review-annotation-swatches button {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+}
+
+.review-annotation-swatches button.active {
+  outline: 2px solid var(--color-text);
+  outline-offset: 1px;
+}
+
+.review-annotation-range {
+  flex: 0 0 104px;
+  display: grid;
+  gap: 1px;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+}
+
+.review-annotation-range input {
+  width: 100%;
+}
+
+.review-annotation-svg {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.review-annotation-svg.drawing {
+  pointer-events: auto;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.review-annotation-error {
+  position: sticky;
+  z-index: 27;
+  bottom: 8px;
+  margin: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: var(--color-danger);
+  background: var(--surface);
+}
+
+.review-annotation-control {
+  position: absolute;
+  z-index: 23;
+  resize: both;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  font: inherit;
+}
+
+.review-annotation-control.text {
+  border-color: transparent;
+  background: transparent;
+}
+
+@media (max-width: 600px) {
+  .review-annotation-toolbar {
+    right: 8px;
+    left: 8px;
+    width: auto;
+    transform: none;
+  }
+
+  .review-annotation-current {
+    min-width: 78px;
+  }
+}
+
+/* Primary workspace density */
+.primary-workspace-page {
+  padding-top: 24px;
+}
+
+.primary-workspace-page > .page-header {
+  margin-bottom: 12px;
+}
+
+.primary-workspace-page > .page-header h1 {
+  letter-spacing: 0;
+}
+
+.primary-workspace-page > .page-header .page-header-subtitle {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+
+.today-page > .page-header {
+  margin-bottom: 12px;
+}
+
+.today-page .today-compose-band {
+  margin-bottom: 18px;
+}
+
+.review-page-header {
+  margin-bottom: 8px;
+}
+
+.review-page .review-mode-tabs {
+  min-height: 40px;
+  margin-bottom: 6px;
+}
+
+.review-page .review-mode-tabs button {
+  min-height: 40px;
+}
+
+.review-page-session-active {
+  padding-top: 12px;
+}
+
+.review-session-chrome {
+  width: min(760px, 100%);
+  min-height: 48px;
+  justify-self: center;
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.review-session-chrome .review-session-exit {
+  grid-row: 1 / span 2;
+  min-height: 44px;
+  margin: 0;
+}
+
+.review-session-menu {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.review-session-chrome .review-progress-meta {
+  align-self: end;
+}
+
+.review-session-chrome .review-progress-track {
+  align-self: start;
+}
+
+.review-page-session-active .review-record-card {
+  padding-top: 16px;
+}
+
+.more-page > .page-header {
+  margin-bottom: 8px;
+}
+
+.more-page .more-section:first-of-type {
+  margin-top: 10px;
+}
+
+.more-page .more-section:not(:first-of-type) {
+  margin-top: 22px;
+}
+
+@media (max-width: 600px) {
+  .primary-workspace-page {
+    padding-top: 16px;
+  }
+
+  .primary-workspace-page > .page-header {
+    margin-bottom: 10px;
+  }
+
+  .review-page.primary-workspace-page {
+    padding-top: 12px;
+  }
+
+  .review-page-session-active {
+    padding-top: 8px;
+  }
+
+  .review-page-session-active .review-record-card {
+    padding-top: 12px;
+  }
+
+  .journal-search-button span {
+    display: none;
+  }
+
+  .journal-search-button {
+    width: 44px;
+    min-width: 44px;
+    padding-inline: 0;
+  }
+}

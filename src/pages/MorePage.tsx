@@ -65,7 +65,7 @@ export const MorePage = ({
   settings,
   autoBackupState,
 }: MorePageProps) => (
-  <main className="page more-page">
+  <main className="page more-page primary-workspace-page">
     <PageHeader
       eyebrow="More"
       title="更多"

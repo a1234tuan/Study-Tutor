@@ -79,6 +79,11 @@ export const REVIEW_COACH_SCHEMA_19_STORES = {
   knowledgePointCoachSnapshots: null,
 } as const;
 
+export const REVIEW_ANNOTATION_SCHEMA_20_STORES = {
+  ...REVIEW_COACH_SCHEMA_19_STORES,
+  reviewAnnotationDrafts: "id, recordId, [recordId+reviewOccurrenceKey], pendingClear, updatedAt",
+} as const;
+
 const tableRows = async <T>(transaction: Transaction, name: string): Promise<T[]> => {
   if (!transaction.db.tables.some((table) => table.name === name)) return [];
   return transaction.table<T, string>(name).toArray();

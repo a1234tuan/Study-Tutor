@@ -52,9 +52,11 @@ import {
   REVIEW_COACH_SCHEMA_17_STORES,
   REVIEW_COACH_SCHEMA_18_STORES,
   REVIEW_COACH_SCHEMA_19_STORES,
+  REVIEW_ANNOTATION_SCHEMA_20_STORES,
   finalizeReviewCoachMigration,
   migrateToReviewCoachSchema17,
 } from "./reviewCoachSchema";
+import type { ReviewAnnotationDraft } from "../features/reviewAnnotations/domain";
 
 export interface RestoreStagingAsset {
   stagingId: string;
@@ -106,6 +108,7 @@ export class StudyJournalDatabase extends Dexie {
   interventionEffectSummaries!: Table<InterventionEffectSummary, string>;
   aiRoleConfigs!: Table<AiRoleConfig, string>;
   coachMigrationBackups!: Table<CoachMigrationBackup, string>;
+  reviewAnnotationDrafts!: Table<ReviewAnnotationDraft, string>;
 
   constructor(name = "study-journal-408") {
     super(name);
@@ -320,6 +323,7 @@ export class StudyJournalDatabase extends Dexie {
     this.version(19)
       .stores(REVIEW_COACH_SCHEMA_19_STORES)
       .upgrade(finalizeReviewCoachMigration);
+    this.version(20).stores(REVIEW_ANNOTATION_SCHEMA_20_STORES);
   }
 }
 
