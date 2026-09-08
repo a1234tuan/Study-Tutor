@@ -1,18 +1,22 @@
 /**
  * 语音复述 Provider 设置抽屉（§6.1 设置入口、§6.2 通话前检查、§12.2 配置抽象落地）。
  *
- * 设计方案要求起始页 header 提供「设置入口」，用户可在此：
- * - 选择 ASR / TTS 档案（设备本机，非敏感，localStorage 保存，不进云同步/备份）。
- * - 填写 Provider 凭据（本机密钥引用，storageAdapter 的 aiSecrets 表，不进 ZIP/流式备份/导出）。
- * - 查看当前 LLM 档案——LLM 复用现有 AiProviderProfile，不复制 DeepSeek Key，
- *   因此这里只展示绑定关系与跳转提示，编辑入口在「更多 → AI 设置」。
- * - 查看§6.2 内容外发清单与各 Provider 配置状态（真连通测试为 Phase 2，此处只查凭据是否存在）。
+ * 起始页 header 的「设置」打开此抽屉。设计要点：
+ * - 每个 Provider 一张友好卡：图标 + 友好名 + 一句用户语言的角色说明 + 配置状态药丸。
+ * - 技术字段（endpoint、resourceId、transport、采样率、profile id、模板版本）默认折叠进
+ *   <details className="voice-tech-details">，不堆在用户脸上（§6.2「用量与技术详情」边界）。
+ * - LLM 复用现有 AiProviderProfile，不在此复制 DeepSeek Key；只展示绑定关系与跳转入口。
+ * - 外发清单用大白话，不显示 stage/asr/llm/tts 内部标签。
  *
- * 错误统一经 src/lib/uiError.ts（context voice-recall）。预览态 storage 不可用时凭据读写降级为内存态。
+ * 视觉复用 APP 既有类（.ai-history-backdrop/.ai-history-drawer/.provider-profile-card/
+ * .ai-image-mode-options/.settings-grid/.secret-input/.inline-section-header/.helper-text/
+ * .status-message/.secondary-button/.icon-button.danger），无内联 <style>。
+ * 凭据读写走 storageAdapter.aiSecrets（device-local，不进备份/导出）；预览态 storage 不可用
+ * 时降级为「未配置」，不阻断 UI。所有错误经 src/lib/uiError.ts（voice-recall）。
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Eye, EyeOff, RefreshCw, Save, Shield, Trash2, X } from "lucide-react";
+import { Bot, Eye, EyeOff, Headphones, KeyRound, Mic, Save, Shield, Trash2, X } from "lucide-react";
 import { BUILTIN_ASR_PROFILES, BUILTIN_TTS_PROFILES, VOICE_DEFAULT_REGISTRY } from "./voiceProviderTemplates";
 import {
   clearProviderCredential,
@@ -29,20 +33,17 @@ import type { AsrProviderProfile, TtsProviderProfile } from "./domain";
 export interface VoiceProviderSettingsDrawerProps {
   open: boolean;
   onClose: () => void;
-  /** 选择变化时回调，供起始页刷新展示。 */
   onSelectionChanged?: () => void;
 }
 
-/** 豆包 ASR 需要 App ID + Access Token 双字段；阿里云只需 API Key。 */
+/** 豆包 ASR 需 App ID + Access Token 双字段；阿里云只需 API Key。 */
 const asrNeedsSecondary = (profile: AsrProviderProfile): boolean => profile.providerId === "doubao";
-
-/** 系统TTS / Fish Audio 是否需要凭据。系统 TTS 离线兜底，不需要。 */
 const ttsNeedsCredential = (profile: TtsProviderProfile): boolean => profile.providerId !== "system";
 
-const EGRESS_LIST: Array<{ stage: "asr" | "llm" | "tts"; label: string; detail: string }> = [
-  { stage: "asr", label: "麦克风音频 → ASR", detail: "本机采集的 PCM 帧发送给 ASR Provider 转写。" },
-  { stage: "llm", label: "日志片段 + 转写 → LLM", detail: "选定的日志范围与确认后的转写文本发送给 LLM 生成教学回应。" },
-  { stage: "tts", label: "教师文本 → TTS", detail: "LLM 生成的口语化回应文本发送给 TTS 合成播放。" },
+const EGRESS_ROWS: Array<{ icon: typeof Mic; label: string; detail: string }> = [
+  { icon: Mic, label: "你说话的音频", detail: "发给语音识别服务转成文字。" },
+  { icon: Bot, label: "你的日志和回答", detail: "发给教学模型出题、追问和讲解。" },
+  { icon: Headphones, label: "老师的回复文本", detail: "发给语音合成读给你听。" },
 ];
 
 export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged }: VoiceProviderSettingsDrawerProps) => {
@@ -55,21 +56,22 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const template = VOICE_DEFAULT_REGISTRY.template;
   const selectedAsr = BUILTIN_ASR_PROFILES.find((p) => p.id === selection.asrProfileId);
   const selectedTts = BUILTIN_TTS_PROFILES.find((p) => p.id === selection.ttsProfileId);
 
   const refreshStatus = useCallback(async () => {
     if (!selectedAsr) {
-      setAsrStatus({ configured: false, hint: "未选择 ASR 档案" });
+      setAsrStatus({ configured: false, hint: "未选择识别服务。" });
     } else {
       setAsrStatus(await readCredentialStatus(selectedAsr.id, {
         providerName: selectedAsr.providerName,
         requiresSecondary: asrNeedsSecondary(selectedAsr),
       }));
     }
-    if (!selectedTts || !ttsNeedsCredential(selectedTts)) {
-      setTtsStatus({ configured: !selectedTts ? false : !ttsNeedsCredential(selectedTts), hint: selectedTts ? "系统 TTS 离线兜底，无需凭据。" : "未选择 TTS 档案。" });
+    if (!selectedTts) {
+      setTtsStatus({ configured: false, hint: "未选择语音合成。" });
+    } else if (!ttsNeedsCredential(selectedTts)) {
+      setTtsStatus({ configured: true, hint: "系统语音合成离线兜底，无需凭据。" });
     } else {
       setTtsStatus(await readCredentialStatus(selectedTts.id, { providerName: selectedTts.providerName }));
     }
@@ -98,19 +100,16 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
     setBusy(true);
     try {
       const primary = asrKeys.primary.trim();
-      if (!primary) {
-        setMessage("请填写主凭据后再保存。");
-        return;
-      }
+      if (!primary) { setMessage("请填写主凭据后再保存。"); return; }
       const secondary = asrNeedsSecondary(selectedAsr) ? asrKeys.secondary.trim() : undefined;
       if (asrNeedsSecondary(selectedAsr) && !secondary) {
-        setMessage("豆包 ASR 需要同时填写 App ID 与 Access Token。");
+        setMessage("豆包识别需要同时填写 App ID 与 Access Token。");
         return;
       }
       await saveProviderCredential(selectedAsr.id, primary, secondary);
       setAsrKeys({ primary: "", secondary: "" });
       await refreshStatus();
-      setMessage(`${selectedAsr.providerName} 凭据已保存到本机，不进入备份或云同步。`);
+      setMessage(`已保存 ${selectedAsr.providerName} 凭据到本机，不进入备份或云同步。`);
     } catch (e) {
       setMessage(formatUiError(e, "voice-recall"));
     } finally {
@@ -125,7 +124,7 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
       await clearProviderCredential(selectedAsr.id);
       setAsrKeys({ primary: "", secondary: "" });
       await refreshStatus();
-      setMessage(`${selectedAsr.providerName} 凭据已从本机清除。`);
+      setMessage(`已从本机清除 ${selectedAsr.providerName} 凭据。`);
     } catch (e) {
       setMessage(formatUiError(e, "voice-recall"));
     } finally {
@@ -139,14 +138,11 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
     setBusy(true);
     try {
       const key = ttsKey.trim();
-      if (!key) {
-        setMessage("请填写 TTS API Key 后再保存。");
-        return;
-      }
+      if (!key) { setMessage("请填写 API Key 后再保存。"); return; }
       await saveProviderCredential(selectedTts.id, key);
       setTtsKey("");
       await refreshStatus();
-      setMessage(`${selectedTts.providerName} API Key 已保存到本机。`);
+      setMessage(`已保存 ${selectedTts.providerName} API Key 到本机。`);
     } catch (e) {
       setMessage(formatUiError(e, "voice-recall"));
     } finally {
@@ -161,7 +157,7 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
       await clearProviderCredential(selectedTts.id);
       setTtsKey("");
       await refreshStatus();
-      setMessage(`${selectedTts.providerName} 凭据已从本机清除。`);
+      setMessage(`已从本机清除 ${selectedTts.providerName} 凭据。`);
     } catch (e) {
       setMessage(formatUiError(e, "voice-recall"));
     } finally {
@@ -170,57 +166,70 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
   };
 
   return (
-    <div className="voice-provider-drawer__overlay" role="dialog" aria-modal="true" aria-label="语音 Provider 设置">
-      <div className="voice-provider-drawer">
-        <header className="voice-provider-drawer__header">
-          <h2>语音 Provider 设置</h2>
+    <div className="ai-history-backdrop" onClick={onClose}>
+      <aside
+        className="ai-history-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="语音 Provider 设置"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">Voice providers</p>
+            <h2>语音 Provider 设置</h2>
+          </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="关闭">
             <X size={18} />
           </button>
         </header>
 
-        <p className="voice-provider-drawer__intro">
-          内置模板 <code>{template.templateId}@{template.version}</code>（{template.status}）。
-          档案选择与音色覆盖保存在本机，不进云同步；密钥、Token、App ID 仅存本机密钥引用，不进备份或导出。
-        </p>
+        <div className="ai-history-list">
+          {/* ASR */}
+          <article className="surface-card">
+            <header className="inline-section-header">
+              <div>
+                <h3><Mic size={16} /> 语音识别（ASR）</h3>
+                <p>把你说的转成文字。</p>
+              </div>
+              {asrStatus && (
+                <span className={`voice-status-pill ${asrStatus.configured ? "ok" : "warn"}`}>
+                  {asrStatus.configured ? "已配置" : "未配置"}
+                </span>
+              )}
+            </header>
 
-        {/* ASR */}
-        <section className="voice-provider-drawer__section">
-          <header className="inline-section-header">
-            <div>
-              <h3>ASR · 语音识别</h3>
-              <p>选择实时转写 Provider；豆包需 App ID + Access Token，阿里云需 API Key。</p>
-            </div>
-          </header>
-          <div className="voice-provider-drawer__profile-list">
-            {BUILTIN_ASR_PROFILES.map((profile) => {
+            <div className="ai-image-mode-options">
+              {BUILTIN_ASR_PROFILES.map((profile) => {
               const active = profile.id === selection.asrProfileId;
               return (
-                <button
-                  key={profile.id}
-                  type="button"
-                  className={`voice-provider-drawer__profile-card${active ? " active" : ""}`}
-                  onClick={() => persistSelection({ ...selection, asrProfileId: profile.id })}
-                >
-                  <strong>{profile.providerName}</strong>
-                  <small>{profile.transport} · {profile.model ?? profile.resourceId ?? "—"}</small>
-                  <small>endpoint: {profile.endpoint}</small>
-                </button>
+                <label key={profile.id} className={active ? "active" : ""}>
+                  <input
+                    type="radio"
+                    name="voice-asr"
+                    value={profile.id}
+                    checked={active}
+                    onChange={() => persistSelection({ ...selection, asrProfileId: profile.id })}
+                  />
+                  <span>
+                    <strong>{profile.providerName}</strong>
+                    <small>{profile.providerId === "doubao" ? "需 App ID + Access Token" : "需 API Key"}</small>
+                  </span>
+                </label>
               );
             })}
-          </div>
+            </div>
 
-          {selectedAsr && (
-            <div className="voice-provider-drawer__credential">
-              <div className="settings-grid">
-                <label>
-                  {asrNeedsSecondary(selectedAsr) ? "App ID" : "API Key"}
+            {selectedAsr && (
+              <div className="settings-grid" style={{ marginTop: 12 }}>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  {asrNeedsSecondary(selectedAsr) ? "豆包应用凭证" : "API Key"}
                   <span className="secret-input">
                     <input
                       value={asrKeys.primary}
                       type={showKey ? "text" : "password"}
                       onChange={(e) => setAsrKeys((c) => ({ ...c, primary: e.target.value }))}
-                      placeholder={asrNeedsSecondary(selectedAsr) ? "豆包 App ID" : "sk-... / dashscope key"}
+                      placeholder={asrNeedsSecondary(selectedAsr) ? "App ID（火山引擎控制台）" : "sk-... / dashscope key"}
                     />
                     <button type="button" onClick={() => setShowKey((v) => !v)} aria-label="切换密钥显示">
                       {showKey ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -228,104 +237,123 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
                   </span>
                 </label>
                 {asrNeedsSecondary(selectedAsr) && (
-                  <label>
+                  <label style={{ gridColumn: "1 / -1" }}>
                     Access Token
                     <span className="secret-input">
                       <input
                         value={asrKeys.secondary}
                         type={showKey ? "text" : "password"}
                         onChange={(e) => setAsrKeys((c) => ({ ...c, secondary: e.target.value }))}
-                        placeholder="豆包 Access Token"
+                        placeholder="Access Token（与 App ID 同一控制台）"
                       />
                     </span>
                   </label>
                 )}
-              </div>
-              <div className="voice-provider-drawer__row">
-                <button type="button" className="secondary-button" onClick={() => void saveAsrCredential()} disabled={busy}>
-                  <Save size={16} /> 保存凭据
-                </button>
-                {asrStatus?.configured && (
-                  <button type="button" className="icon-button danger" onClick={() => void removeAsrCredential()} disabled={busy}>
-                    <Trash2 size={16} />
+                <div className="provider-template-row" style={{ gridColumn: "1 / -1" }}>
+                  <button type="button" className="secondary-button" onClick={() => void saveAsrCredential()} disabled={busy}>
+                    <Save size={16} /> 保存凭据
                   </button>
-                )}
-                <button type="button" className="icon-button" onClick={() => void refreshStatus()} disabled={busy} aria-label="刷新状态">
-                  <RefreshCw size={16} />
-                </button>
-                {asrStatus && (
-                  <span className={`badge${asrStatus.configured ? " ok" : " warn"}`}>
-                    {asrStatus.configured ? "已配置" : "未配置"}
-                  </span>
-                )}
+                  {asrStatus?.configured && (
+                    <button type="button" className="icon-button danger" onClick={() => void removeAsrCredential()} disabled={busy} aria-label="清除凭据">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
-              {asrStatus && <p className="helper-text">{asrStatus.hint}</p>}
-            </div>
-          )}
-        </section>
+            )}
+            {asrStatus && <p className="helper-text">{asrStatus.hint}</p>}
 
-        {/* LLM */}
-        <section className="voice-provider-drawer__section">
-          <header className="inline-section-header">
-            <div>
-              <h3>LLM · 教学模型</h3>
-              <p>语音链复用现有 AI 设置中的供应商档案，不在此重复填写 DeepSeek Key。</p>
-            </div>
-          </header>
-          <div className="voice-provider-drawer__llm">
-            <div>
-              <strong>当前绑定档案</strong>
-              <small>{selection.llmProfileId}（来自内置模板）</small>
-              <small>编辑入口：更多 → AI 设置（DeepSeek / OpenAI 兼容中转 API）</small>
-            </div>
-            <span className="badge info">复用 AiProviderProfile</span>
-          </div>
-          <p className="helper-text">
-            流式 LLM adapter（DeepSeek SSE）在 Phase 2 接入；此处只展示绑定关系，避免复制一份密钥造成泄漏面扩大。
-          </p>
-        </section>
+            {selectedAsr && (
+              <details className="voice-tech-details">
+                <summary>技术详情</summary>
+                <dl>
+                  <dt>传输协议</dt><dd>{selectedAsr.transport}</dd>
+                  <dt>端点</dt><dd>{selectedAsr.endpoint}</dd>
+                  {selectedAsr.model && <><dt>模型</dt><dd>{selectedAsr.model}</dd></>}
+                  {selectedAsr.resourceId && <><dt>资源 ID</dt><dd>{selectedAsr.resourceId}</dd></>}
+                  <dt>采样率</dt><dd>{selectedAsr.acceptedSampleRates.join(", ")} Hz</dd>
+                  <dt>档案 ID</dt><dd>{selectedAsr.id}</dd>
+                </dl>
+              </details>
+            )}
+          </article>
 
-        {/* TTS */}
-        <section className="voice-provider-drawer__section">
-          <header className="inline-section-header">
-            <div>
-              <h3>TTS · 语音合成</h3>
-              <p>选择播放 Provider 与音色；Fish Audio 需 API Key，系统 TTS 离线兜底无需凭据。</p>
+          {/* LLM */}
+          <article className="surface-card">
+            <header className="inline-section-header">
+              <div>
+                <h3><Bot size={16} /> 教学模型（LLM）</h3>
+                <p>出题、追问和讲解的老师。</p>
+              </div>
+              <span className="voice-status-pill info">复用 AI 设置</span>
+            </header>
+            <p className="helper-text">
+              语音链复用「更多 → AI 设置」里已配好的供应商档案（DeepSeek 或 OpenAI 兼容中转 API），不在此重复填写密钥，避免泄漏面扩大。
+            </p>
+            <div className="provider-template-row">
+              <button type="button" className="secondary-button" disabled title="预览态不可跳转；正式态进入更多 → AI 设置">
+                前往 AI 设置
+              </button>
             </div>
-          </header>
-          <div className="voice-provider-drawer__profile-list">
-            {BUILTIN_TTS_PROFILES.map((profile) => {
+            <details className="voice-tech-details">
+              <summary>技术详情</summary>
+              <dl>
+                <dt>绑定档案</dt><dd>{selection.llmProfileId}</dd>
+                <dt>流式协议</dt><dd>DeepSeek SSE（Phase 2 接入）</dd>
+                <dt>模板版本</dt><dd>{VOICE_DEFAULT_REGISTRY.template.templateId}@{VOICE_DEFAULT_REGISTRY.template.version}</dd>
+              </dl>
+            </details>
+          </article>
+
+          {/* TTS */}
+          <article className="surface-card">
+            <header className="inline-section-header">
+              <div>
+                <h3><Headphones size={16} /> 语音合成（TTS）</h3>
+                <p>把老师的回答读给你听。</p>
+              </div>
+              {ttsStatus && (
+                <span className={`voice-status-pill ${ttsStatus.configured ? "ok" : "warn"}`}>
+                  {ttsStatus.configured ? "已配置" : "未配置"}
+                </span>
+              )}
+            </header>
+
+            <div className="ai-image-mode-options">
+              {BUILTIN_TTS_PROFILES.map((profile) => {
               const active = profile.id === selection.ttsProfileId;
               return (
-                <button
-                  key={profile.id}
-                  type="button"
-                  className={`voice-provider-drawer__profile-card${active ? " active" : ""}`}
-                  onClick={() => persistSelection({ ...selection, ttsProfileId: profile.id })}
-                >
-                  <strong>{profile.providerName}</strong>
-                  <small>{profile.transport} · {profile.model ?? "—"}</small>
-                  <small>默认音色: {profile.voiceId ?? "—"}</small>
-                </button>
+                <label key={profile.id} className={active ? "active" : ""}>
+                  <input
+                    type="radio"
+                    name="voice-tts"
+                    value={profile.id}
+                    checked={active}
+                    onChange={() => persistSelection({ ...selection, ttsProfileId: profile.id })}
+                  />
+                  <span>
+                    <strong>{profile.providerName}</strong>
+                    <small>{ttsNeedsCredential(profile) ? "需 API Key" : "离线兜底，无需凭据"}</small>
+                  </span>
+                </label>
               );
             })}
-          </div>
+            </div>
 
-          {selectedTts && (
-            <div className="voice-provider-drawer__credential">
-              <div className="settings-grid">
-                <label>
-                  音色覆盖（可选）
+            {selectedTts && (
+              <div className="settings-grid" style={{ marginTop: 12 }}>
+                <label style={{ gridColumn: "1 / -1" }}>
+                  音色
                   <input
                     value={selection.ttsVoiceIdOverride ?? ""}
                     onChange={(e) => persistSelection({ ...selection, ttsVoiceIdOverride: e.target.value.trim() || undefined })}
-                    placeholder={selectedTts.voiceId ?? "使用档案默认音色"}
+                    placeholder={selectedTts.voiceId ? `默认：${selectedTts.voiceId}` : "使用档案默认音色"}
                   />
-                  <small>留空则使用档案默认音色。该选择保存在本机，不进云同步。</small>
+                  <small style={{ color: "var(--color-muted)" }}>留空使用档案默认音色。该选择保存在本机，不进云同步。</small>
                 </label>
                 {ttsNeedsCredential(selectedTts) && (
-                  <label>
-                    TTS API Key
+                  <label style={{ gridColumn: "1 / -1" }}>
+                    API Key
                     <span className="secret-input">
                       <input
                         value={ttsKey}
@@ -339,105 +367,73 @@ export const VoiceProviderSettingsDrawer = ({ open, onClose, onSelectionChanged 
                     </span>
                   </label>
                 )}
-              </div>
-              {ttsNeedsCredential(selectedTts) && (
-                <div className="voice-provider-drawer__row">
-                  <button type="button" className="secondary-button" onClick={() => void saveTtsCredential()} disabled={busy}>
-                    <Save size={16} /> 保存凭据
-                  </button>
-                  {ttsStatus?.configured && (
-                    <button type="button" className="icon-button danger" onClick={() => void removeTtsCredential()} disabled={busy}>
-                      <Trash2 size={16} />
+                {ttsNeedsCredential(selectedTts) && (
+                  <div className="provider-template-row" style={{ gridColumn: "1 / -1" }}>
+                    <button type="button" className="secondary-button" onClick={() => void saveTtsCredential()} disabled={busy}>
+                      <Save size={16} /> 保存凭据
                     </button>
-                  )}
-                  <button type="button" className="icon-button" onClick={() => void refreshStatus()} disabled={busy} aria-label="刷新状态">
-                    <RefreshCw size={16} />
-                  </button>
-                  {ttsStatus && (
-                    <span className={`badge${ttsStatus.configured ? " ok" : " warn"}`}>
-                      {ttsStatus.configured ? "已配置" : "未配置"}
-                    </span>
-                  )}
-                </div>
-              )}
-              {ttsStatus && <p className="helper-text">{ttsStatus.hint}</p>}
-            </div>
-          )}
-        </section>
-
-        {/* 外发清单 + 连通状态 */}
-        <section className="voice-provider-drawer__section">
-          <header className="inline-section-header">
-            <div>
-              <h3><Shield size={16} /> 内容外发清单与配置状态</h3>
-              <p>§6.2 通话前检查：三个 Provider 各需可用配置与本机密钥。真连通测试为 Phase 2，此处只查凭据是否已配置。</p>
-            </div>
-          </header>
-          <ul className="voice-provider-drawer__egress">
-            {EGRESS_LIST.map((item) => {
-              const status = item.stage === "asr" ? asrStatus : item.stage === "tts" ? ttsStatus : null;
-              const configured = item.stage === "llm" ? null : status?.configured;
-              return (
-                <li key={item.stage}>
-                  <div>
-                    <strong>{item.label}</strong>
-                    <small>{item.detail}</small>
+                    {ttsStatus?.configured && (
+                      <button type="button" className="icon-button danger" onClick={() => void removeTtsCredential()} disabled={busy} aria-label="清除凭据">
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
-                  {item.stage === "llm" ? (
-                    <span className="badge info">复用 AI 设置</span>
-                  ) : configured ? (
-                    <span className="badge ok">已配置</span>
-                  ) : (
-                    <span className="badge warn">未配置</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+                )}
+              </div>
+            )}
+            {ttsStatus && <p className="helper-text">{ttsStatus.hint}</p>}
 
-        {message && <p className="status-message">{message}</p>}
-      </div>
+            {selectedTts && (
+              <details className="voice-tech-details">
+                <summary>技术详情</summary>
+                <dl>
+                  <dt>传输协议</dt><dd>{selectedTts.transport}</dd>
+                  <dt>端点</dt><dd>{selectedTts.endpoint}</dd>
+                  {selectedTts.model && <><dt>模型</dt><dd>{selectedTts.model}</dd></>}
+                  {selectedTts.voiceId && <><dt>默认音色</dt><dd>{selectedTts.voiceId}</dd></>}
+                  <dt>档案 ID</dt><dd>{selectedTts.id}</dd>
+                </dl>
+              </details>
+            )}
+          </article>
 
-      <style>{CSS}</style>
+          {/* 外发清单 */}
+          <article className="surface-card">
+            <header className="inline-section-header">
+              <div>
+                <h3><Shield size={16} /> 内容外发清单</h3>
+                <p>开始通话前确认：以下内容会发送给对应服务。</p>
+              </div>
+            </header>
+            <div className="voice-egress-list">
+              {EGRESS_ROWS.map((row) => {
+                const Icon = row.icon;
+                const status = row.icon === Mic ? asrStatus : row.icon === Headphones ? ttsStatus : null;
+                return (
+                  <div className="voice-egress-row" key={row.label}>
+                    <div>
+                      <strong><Icon size={15} /> {row.label}</strong>
+                      <small>{row.detail}</small>
+                    </div>
+                    {row.icon === Bot ? (
+                      <span className="voice-status-pill info">复用 AI 设置</span>
+                    ) : status?.configured ? (
+                      <span className="voice-status-pill ok">已配置</span>
+                    ) : (
+                      <span className="voice-status-pill warn">未配置</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="helper-text">
+              <KeyRound size={13} /> 凭据、Token、App ID 仅存本机密钥引用，不进入备份、云同步或导出；真实接口连通测试为 Phase 2，此处只查凭据是否已配置。
+            </p>
+          </article>
+
+          {message && <p className="status-message">{message}</p>}
+        </div>
+      </aside>
     </div>
   );
 };
-
-const CSS = `
-.voice-provider-drawer__overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;justify-content:flex-end;z-index:60}
-.voice-provider-drawer{width:min(520px,92vw);height:100%;overflow-y:auto;background:var(--color-surface,#fbfaf7);color:var(--color-text,#2a2622);padding:20px 18px;display:flex;flex-direction:column;gap:16px;box-shadow:-8px 0 24px rgba(0,0,0,.18)}
-.voice-provider-drawer__header{display:flex;align-items:center;gap:8px}
-.voice-provider-drawer__header h2{font-size:18px;margin:0;flex:1}
-.voice-provider-drawer__intro{font-size:12px;color:var(--color-text-muted,#7a726b);margin:0;line-height:1.6}
-.voice-provider-drawer__intro code{font-size:12px}
-.voice-provider-drawer__section{display:flex;flex-direction:column;gap:10px;padding-top:8px;border-top:1px solid var(--color-border,#d8d2c9)}
-.voice-provider-drawer__section .inline-section-header h3{font-size:14px;margin:0;display:flex;align-items:center;gap:6px}
-.voice-provider-drawer__section .inline-section-header p{font-size:12px;color:var(--color-text-muted,#7a726b);margin:2px 0 0}
-.voice-provider-drawer__profile-list{display:flex;flex-direction:column;gap:8px}
-.voice-provider-drawer__profile-card{display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 12px;border:1px solid var(--color-border,#d8d2c9);border-radius:8px;background:var(--color-surface-raised,#f3efe9);cursor:pointer}
-.voice-provider-drawer__profile-card.active{border-color:var(--color-accent,#5b8def);box-shadow:0 0 0 1px var(--color-accent,#5b8def) inset}
-.voice-provider-drawer__profile-card small{font-size:11px;color:var(--color-text-muted,#7a726b);word-break:break-all}
-.voice-provider-drawer__credential{display:flex;flex-direction:column;gap:10px;padding:10px;border:1px dashed var(--color-border,#d8d2c9);border-radius:8px}
-.voice-provider-drawer__llm{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border:1px solid var(--color-border,#d8d2c9);border-radius:8px;background:var(--color-surface-raised,#f3efe9)}
-.voice-provider-drawer__llm small{display:block;font-size:11px;color:var(--color-text-muted,#7a726b)}
-.voice-provider-drawer__row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.voice-provider-drawer__egress{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.voice-provider-drawer__egress li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--color-border,#d8d2c9);border-radius:8px}
-.voice-provider-drawer__egress li small{display:block;font-size:11px;color:var(--color-text-muted,#7a726b)}
-.badge{font-size:11px;padding:2px 8px;border-radius:10px;border:1px solid var(--color-border,#d8d2c9);color:var(--color-text-muted,#7a726b)}
-.badge.ok{color:#2f7d52;border-color:#9bcfb1;background:rgba(120,200,150,.12)}
-.badge.warn{color:#9a6a1f;border-color:#e6c98a;background:rgba(230,201,138,.16)}
-.badge.info{color:var(--color-accent,#3a6cc6)}
-.voice-provider-drawer .settings-grid{display:grid;grid-template-columns:1fr;gap:8px}
-.voice-provider-drawer label{display:flex;flex-direction:column;gap:4px;font-size:12px}
-.voice-provider-drawer label small{color:var(--color-text-muted,#7a726b)}
-.voice-provider-drawer .secret-input{display:flex;align-items:center;gap:4px}
-.voice-provider-drawer .secret-input input{flex:1}
-.voice-provider-drawer input{padding:8px;border:1px solid var(--color-border,#d8d2c9);border-radius:6px;font:inherit;background:var(--color-surface,#fbfaf7)}
-.voice-provider-drawer .helper-text{font-size:12px;color:var(--color-text-muted,#7a726b);margin:0}
-.voice-provider-drawer .status-message{font-size:12px;margin:0;color:var(--color-accent,#3a6cc6)}
-.voice-provider-drawer .primary-button,.voice-provider-drawer .secondary-button{display:inline-flex;align-items:center;gap:6px;font-size:13px}
-.voice-provider-drawer .icon-button.danger{color:var(--color-danger,#c0392b)}
-@media (prefers-reduced-motion: reduce){.voice-provider-drawer{transition:none}}
-`;

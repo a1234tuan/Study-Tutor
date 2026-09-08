@@ -1,20 +1,24 @@
 /**
  * 语音复述开始页（§6 起始页落地，Phase 3）。
  *
- * 分段控件选择来源（自由主题 / 资料范围；任务绑定 Phase 5 才开放）；
- * 自由主题输入主题 + 知识边界策略；资料范围会话复用 AiKnowledgeScopePicker
- * （minSelectedRecords=1，§22）——生产路由嵌入完整选择器；本预览用确定性种子日志做轻量展示。
+ * 分段选择来源（自由主题 / 资料范围；任务绑定 Phase 5 才开放）；自由主题输入主题 +
+ * 知识边界策略；资料范围会话复用 AiKnowledgeScopePicker（minSelectedRecords=1，§22）
+ * ——生产路由嵌入完整选择器；本预览用确定性种子日志做轻量展示。
  * 显示费用等级与时长上限（§16：默认 10min，80% 提醒，软上限 20min）。
  * 开始通话时构造 VoiceRecallSessionLocal 检查点写入 schema 21 local-only 表，再进入沉浸式通话页。
  *
- * 所有错误经 src/lib/uiError.ts（context voice-recall）。预览入口 ?preview=voice-stage3。
+ * 视觉复用 APP 既有设计系统（.page/.ai-topbar/.surface-card/.ai-image-mode-options/
+ * .inline-section-header/.primary-button），不使用内联样式或自造类；主题两轴
+ * （data-visual-theme + data-theme）在挂载时写到 documentElement，使 visual-v2.css
+ * token 作用域在预览态（不经 <App>）也生效。所有错误经 src/lib/uiError.ts（voice-recall）。
+ * 预览入口 ?preview=voice-stage3。
  */
 
-import { useCallback, useMemo, useState } from "react";
-import { ArrowLeft, Mic, Clock, Info, Settings } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, BookOpen, Clock3, Compass, Mic, Settings } from "lucide-react";
 import { formatUiError } from "../../lib/uiError";
+import { readVisualTheme } from "../../lib/visualTheme";
 import { buildVoiceRecallSession } from "./voiceRecallSessionBuilder";
-import { VOICE_DEFAULT_REGISTRY } from "./voiceProviderTemplates";
 import { getVoiceProviderSelection, resolveSelectedProfiles } from "./voiceProviderSelection";
 import { VoiceProviderSettingsDrawer } from "./VoiceProviderSettingsDrawer";
 import { createInitialMemory } from "./sessionMemory";
@@ -32,8 +36,11 @@ export interface VoiceRecallStartPageProps {
 type SourceTab = "free-topic" | "scope-practice";
 
 const DEFAULT_MAX_SESSION_MINUTES = 10;
-const SOFT_CAP_MINUTES = 20;
-const REMINDER_PERCENT = 80;
+
+const SOURCES: Array<{ value: SourceTab; label: string; hint: string; icon: typeof Mic }> = [
+  { value: "free-topic", label: "自由主题", hint: "直接说一个想复述的主题，不要求本地日志。", icon: Compass },
+  { value: "scope-practice", label: "资料范围", hint: "从一条或多条日志出发做闭卷复述。", icon: BookOpen },
+];
 
 const KNOWLEDGE_POLICIES: Array<{ value: KnowledgePolicy; label: string; hint: string }> = [
   { value: "notes-only", label: "仅依据日志", hint: "只回答日志里有依据的内容，不足时说明。" },
@@ -41,11 +48,13 @@ const KNOWLEDGE_POLICIES: Array<{ value: KnowledgePolicy; label: string; hint: s
   { value: "expand", label: "允许教材补充", hint: "可补充标准表述，但须显式标注。" },
 ];
 
-const INPUT_MODES: Array<{ value: InputMode; label: string }> = [
-  { value: "auto-half-duplex", label: "自动半双工" },
-  { value: "push-to-talk", label: "按住说话" },
-  { value: "tap-to-record", label: "点击录音" },
+const INPUT_MODES: Array<{ value: InputMode; label: string; hint: string }> = [
+  { value: "auto-half-duplex", label: "自动半双工", hint: "AI 说完自动听你说，说完一段自动提交。" },
+  { value: "push-to-talk", label: "按住说话", hint: "按住采集、松开发送，适合嘈杂环境。" },
+  { value: "tap-to-record", label: "点击录音", hint: "点一下开始、再点一下发送。" },
 ];
+
+const QUICK_TOPICS = ["比例原则三个子原则", "操作系统进程调度", "行政法信赖保护原则"];
 
 export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitles = [] }: VoiceRecallStartPageProps) => {
   const [tab, setTab] = useState<SourceTab>("free-topic");
@@ -59,7 +68,16 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
   // 用户在本机选择的 ASR/LLM/TTS 档案（§12.2：非敏感，localStorage，不进云同步）。
   const [selection, setSelection] = useState(() => getVoiceProviderSelection());
 
-  const template = VOICE_DEFAULT_REGISTRY.template;
+  // 预览态不经 <App>，需把主题两轴写到 documentElement，visual-v2.css token 才生效。
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.visualTheme = readVisualTheme();
+    if (!root.dataset.theme) {
+      const prefersDark = typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
+      root.dataset.theme = prefersDark ? "dark" : "light";
+    }
+  }, []);
+
   const profiles = resolveSelectedProfiles(selection);
   const asrProfile = profiles.asr;
   const ttsProfile = profiles.tts;
@@ -75,10 +93,8 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
 
   const handleStart = useCallback(async () => {
     setError(null);
-    if (tab === "free-topic" && !freeTopic.trim()) {
-      setError(formatUiError(new Error("empty topic"), "voice-recall"));
-      return;
-    }
+    // 主题留空时走自由复述默认，不强迫输入（§3.2 自由主题不要求存在本地日志）。
+    const topic = freeTopic.trim() || "自由主题复述";
     setBusy(true);
     try {
       const sourceKind: VoiceRecallSourceKind = tab === "free-topic" ? "free-topic" : "scope-practice";
@@ -87,17 +103,14 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
         sessionId,
         sourceKind,
         config: startConfig,
-        // 自由主题默认 expand（允许教材补充）；范围会话默认 notes-only。构造器内部已处理；
-        // 此处显式传用户当前选择，保证用户覆盖优先。
         knowledgePolicy,
         startedAt: new Date().toISOString(),
         navSource: sourceKind === "scope-practice"
           ? { origin: "review-home", filterSnapshot: { seedRecordTitles } }
           : { origin: "today" },
       });
-      // 注入初始记忆（自由主题以用户输入为目标；范围会话以范围为标签）。
       const initialMemory = createInitialMemory(
-        sourceKind === "free-topic" ? freeTopic.trim() : "资料范围复述",
+        sourceKind === "free-topic" ? topic : "资料范围复述",
         sourceKind === "free-topic" ? "自由主题" : `已选 ${seedRecordTitles.length || 0} 条日志`,
       );
       session.memory = initialMemory;
@@ -115,162 +128,166 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
   }
 
   return (
-    <div className="voice-recall-start" data-visual-theme="reading" data-theme="light">
-      <header className="voice-recall-start__header">
+    <main className="page voice-recall-start-page">
+      <header className="ai-topbar">
         {onBack && (
-          <button type="button" className="icon-button" onClick={onBack} aria-label="返回">
+          <button type="button" className="icon-button" onClick={onBack} aria-label="返回" title="返回">
             <ArrowLeft size={18} />
           </button>
         )}
-        <h1>语音主动回忆</h1>
-        <span className="voice-recall-start__status">模板 {template.templateId}@{template.version} · {template.status}</span>
-        <button
-          type="button"
-          className="icon-button voice-recall-start__settings"
-          onClick={() => setSettingsOpen(true)}
-          aria-label="Provider 设置"
-          title="ASR / LLM / TTS 设置"
-        >
-          <Settings size={18} />
-        </button>
+        <div className="ai-topbar-title">
+          <p className="eyebrow">语音复述</p>
+          <h1>语音主动回忆</h1>
+        </div>
+        <div className="ai-topbar-actions">
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Provider 设置"
+            title="ASR / LLM / TTS 设置"
+          >
+            <Settings size={18} />
+          </button>
+        </div>
       </header>
 
-      <section className="voice-recall-start__source">
-        <div className="segmented" role="tablist" aria-label="会话来源">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "free-topic"}
-            className={`segmented__item${tab === "free-topic" ? " active" : ""}`}
-            onClick={() => setTab("free-topic")}
-          >自由主题</button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "scope-practice"}
-            className={`segmented__item${tab === "scope-practice" ? " active" : ""}`}
-            onClick={() => setTab("scope-practice")}
-          >资料范围</button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={false}
-            className="segmented__item segmented__item--disabled"
-            disabled
-            title="Phase 5 Review Coach 深度接入后开放"
-          >任务绑定（即将）</button>
+      <section className="surface-card voice-recall-hero">
+        <label htmlFor="voice-free-topic" className="voice-recall-hero__label">
+          想复述或检查什么？
+        </label>
+        <textarea
+          id="voice-free-topic"
+          value={freeTopic}
+          onChange={(e) => setFreeTopic(e.target.value)}
+          placeholder="例如：用比例原则分析三个子原则的关系。留空可直接开始自由复述。"
+          rows={3}
+          className="voice-recall-hero__textarea"
+        />
+        <div className="provider-template-row">
+          {QUICK_TOPICS.map((topic) => (
+            <button
+              key={topic}
+              type="button"
+              className="secondary-button"
+              onClick={() => setFreeTopic(topic)}
+            >
+              {topic}
+            </button>
+          ))}
         </div>
 
-        {tab === "free-topic" ? (
-          <div className="voice-recall-start__field">
-            <label htmlFor="voice-free-topic">主题或学习目标</label>
-            <textarea
-              id="voice-free-topic"
-              value={freeTopic}
-              onChange={(e) => setFreeTopic(e.target.value)}
-              placeholder="例如：用比例原则分析三个子原则的关系"
-              rows={3}
-            />
-          </div>
-        ) : (
-          <div className="voice-recall-start__scope">
-            <p className="voice-recall-start__hint">
-              生产路由复用 <code>AiKnowledgeScopePicker</code>（minSelectedRecords=1，§22）选择日志范围。
-            </p>
-            {seedRecordTitles.length > 0 && (
-              <ul className="voice-recall-start__seed-records">
-                {seedRecordTitles.map((title, idx) => (
-                  <li key={idx}>{title}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
+        <button
+          type="button"
+          className="primary-button voice-recall-hero__start"
+          onClick={() => void handleStart()}
+          disabled={busy}
+        >
+          <Mic size={18} /> 开始通话
+        </button>
 
-        <fieldset className="voice-recall-start__policy">
-          <legend>知识边界</legend>
-          {KNOWLEDGE_POLICIES.map((policy) => (
-            <label key={policy.value} className={`radio-row${knowledgePolicy === policy.value ? " selected" : ""}`}>
-              <input
-                type="radio"
-                name="knowledge-policy"
-                value={policy.value}
-                checked={knowledgePolicy === policy.value}
-                onChange={() => setKnowledgePolicy(policy.value)}
-              />
-              <span className="radio-row__label">{policy.label}</span>
-              <span className="radio-row__hint">{policy.hint}</span>
-            </label>
-          ))}
-        </fieldset>
+        <p className="helper-text voice-recall-hero__summary">
+          <Clock3 size={13} /> 默认 {DEFAULT_MAX_SESSION_MINUTES} 分钟 · {asrProfile?.providerName ?? "识别"} / DeepSeek 教学 / {ttsProfile?.providerName ?? "合成"} · 点右上设置改凭据
+        </p>
 
-        <fieldset className="voice-recall-start__input-mode">
-          <legend>输入模式（通话中只允许在暂停时切换）</legend>
-          {INPUT_MODES.map((mode) => (
-            <label key={mode.value} className={`radio-row${inputMode === mode.value ? " selected" : ""}`}>
-              <input
-                type="radio"
-                name="input-mode"
-                value={mode.value}
-                checked={inputMode === mode.value}
-                onChange={() => setInputMode(mode.value)}
-              />
-              <span className="radio-row__label">{mode.label}</span>
-            </label>
-          ))}
-        </fieldset>
+        {error && <p className="status-message" role="alert">{error}</p>}
       </section>
 
-      <aside className="voice-recall-start__cost" aria-label="费用与时长">
-        <div className="cost-row"><Clock size={16} /> <span>默认 {DEFAULT_MAX_SESSION_MINUTES} 分钟，软上限 {SOFT_CAP_MINUTES} 分钟</span></div>
-        <div className="cost-row"><Info size={16} /> <span>{REMINDER_PERCENT}% 用量提醒，达软上限请求门控</span></div>
-        <div className="cost-row"><Mic size={16} /> <span>ASR：{asrProfile?.providerName ?? selection.asrProfileId}（{asrProfile?.transport ?? "—"}）</span></div>
-        <div className="cost-row"><Mic size={16} /> <span>LLM：{selection.llmProfileId}（复用 AI 设置）</span></div>
-        <div className="cost-row"><Mic size={16} /> <span>TTS：{ttsProfile?.providerName ?? selection.ttsProfileId}（{ttsProfile?.transport ?? "—"}）</span></div>
-      </aside>
+      <details className="voice-tech-details voice-recall-advanced">
+        <summary>高级选项</summary>
+        <section className="surface-card" style={{ border: 0, padding: 0, boxShadow: "none", background: "transparent" }}>
+          <header className="inline-section-header">
+            <div>
+              <h3>会话来源</h3>
+              <p>默认自由主题；资料范围从日志出发做闭卷复述。</p>
+            </div>
+          </header>
+          <div className="ai-image-mode-options">
+            {SOURCES.map((source) => {
+              const Icon = source.icon;
+              const active = tab === source.value;
+              return (
+                <label key={source.value} className={active ? "active" : ""}>
+                  <input
+                    type="radio"
+                    name="voice-source"
+                    value={source.value}
+                    checked={active}
+                    onChange={() => setTab(source.value)}
+                  />
+                  <span>
+                    <strong><Icon size={16} /> {source.label}</strong>
+                    <small>{source.hint}</small>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          {tab === "scope-practice" && seedRecordTitles.length > 0 && (
+            <p className="helper-text" style={{ marginTop: 8 }}>
+              当前预览种子：<strong>{seedRecordTitles.join("、")}</strong>
+            </p>
+          )}
+        </section>
 
-      {error && <p className="voice-recall-start__error" role="alert">{error}</p>}
+        <section className="surface-card" style={{ border: 0, padding: 0, boxShadow: "none", background: "transparent" }}>
+          <header className="inline-section-header">
+            <div>
+              <h3>知识边界</h3>
+              <p>默认允许教材补充；回答会显式标注来源。</p>
+            </div>
+          </header>
+          <div className="ai-image-mode-options">
+            {KNOWLEDGE_POLICIES.map((policy) => (
+              <label key={policy.value} className={knowledgePolicy === policy.value ? "active" : ""}>
+                <input
+                  type="radio"
+                  name="knowledge-policy"
+                  value={policy.value}
+                  checked={knowledgePolicy === policy.value}
+                  onChange={() => setKnowledgePolicy(policy.value)}
+                />
+                <span>
+                  <strong>{policy.label}</strong>
+                  <small>{policy.hint}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
 
-      <button
-        type="button"
-        className="primary-button voice-recall-start__start"
-        onClick={() => void handleStart()}
-        disabled={busy}
-      >开始通话</button>
+        <section className="surface-card" style={{ border: 0, padding: 0, boxShadow: "none", background: "transparent" }}>
+          <header className="inline-section-header">
+            <div>
+              <h3>输入模式</h3>
+              <p>默认自动半双工；通话中只允许暂停时切换。</p>
+            </div>
+          </header>
+          <div className="ai-image-mode-options">
+            {INPUT_MODES.map((mode) => (
+              <label key={mode.value} className={inputMode === mode.value ? "active" : ""}>
+                <input
+                  type="radio"
+                  name="input-mode"
+                  value={mode.value}
+                  checked={inputMode === mode.value}
+                  onChange={() => setInputMode(mode.value)}
+                />
+                <span>
+                  <strong>{mode.label}</strong>
+                  <small>{mode.hint}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </section>
+      </details>
 
       <VoiceProviderSettingsDrawer
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSelectionChanged={() => setSelection(getVoiceProviderSelection())}
       />
-
-      <style>{CSS}</style>
-    </div>
+    </main>
   );
 };
-
-const CSS = `
-.voice-recall-start{max-width:640px;margin:0 auto;padding:24px 16px;min-height:100dvh;display:flex;flex-direction:column;gap:16px;background:var(--color-surface,#fbfaf7);color:var(--color-text,#2a2622)}
-.voice-recall-start__header{display:flex;align-items:center;gap:12px}
-.voice-recall-start__header h1{font-size:20px;margin:0;flex:1}
-.voice-recall-start__status{font-size:12px;color:var(--color-text-muted,#7a726b)}
-.segmented{display:flex;gap:4px;background:var(--color-surface-raised,#f3efe9);border-radius:10px;padding:4px}
-.segmented__item{flex:1;border:0;background:transparent;padding:10px;border-radius:8px;font-size:14px;color:var(--color-text,#2a2622);cursor:pointer}
-.segmented__item.active{background:var(--color-surface,#fbfaf7);box-shadow:0 1px 2px rgba(0,0,0,.08)}
-.segmented__item--disabled{opacity:.45;cursor:not-allowed}
-.voice-recall-start__field,.voice-recall-start__scope{display:flex;flex-direction:column;gap:8px}
-.voice-recall-start__field textarea{resize:vertical;padding:10px;border:1px solid var(--color-border,#d8d2c9);border-radius:8px;font:inherit;background:var(--color-surface,#fbfaf7)}
-.voice-recall-start__hint{font-size:13px;color:var(--color-text-muted,#7a726b);margin:0}
-.voice-recall-start__seed-records{margin:0;padding-left:18px;font-size:13px}
-fieldset{border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:6px}
-legend{font-size:13px;font-weight:600;margin-bottom:4px}
-.radio-row{display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--color-border,#d8d2c9);border-radius:8px;background:var(--color-surface-raised,#f3efe9)}
-.radio-row.selected{border-color:var(--color-accent,#5b8def)}
-.radio-row__label{font-size:14px}
-.radio-row__hint{font-size:12px;color:var(--color-text-muted,#7a726b);flex:1}
-.voice-recall-start__cost{display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:10px;background:var(--color-surface-raised,#f3efe9);font-size:13px}
-.cost-row{display:flex;align-items:center;gap:8px;color:var(--color-text-muted,#7a726b)}
-.voice-recall-start__error{color:var(--color-danger,#c0392b);font-size:13px;margin:0}
-.voice-recall-start__start{margin-top:auto;padding:14px;font-size:16px}
-@media (prefers-reduced-motion: reduce){.segmented__item{transition:none}}
-`;
