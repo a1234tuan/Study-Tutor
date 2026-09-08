@@ -11,10 +11,12 @@
  */
 
 import { useCallback, useMemo, useState } from "react";
-import { ArrowLeft, Mic, Clock, Info } from "lucide-react";
+import { ArrowLeft, Mic, Clock, Info, Settings } from "lucide-react";
 import { formatUiError } from "../../lib/uiError";
 import { buildVoiceRecallSession } from "./voiceRecallSessionBuilder";
 import { VOICE_DEFAULT_REGISTRY } from "./voiceProviderTemplates";
+import { getVoiceProviderSelection, resolveSelectedProfiles } from "./voiceProviderSelection";
+import { VoiceProviderSettingsDrawer } from "./VoiceProviderSettingsDrawer";
 import { createInitialMemory } from "./sessionMemory";
 import type { InputMode, KnowledgePolicy, VoiceCallConfig, VoiceRecallSourceKind } from "./domain";
 import { VoiceRecallPrototypeApp } from "./VoiceRecallPrototypeApp";
@@ -53,17 +55,23 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
   const [startedSessionId, setStartedSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // 用户在本机选择的 ASR/LLM/TTS 档案（§12.2：非敏感，localStorage，不进云同步）。
+  const [selection, setSelection] = useState(() => getVoiceProviderSelection());
 
   const template = VOICE_DEFAULT_REGISTRY.template;
+  const profiles = resolveSelectedProfiles(selection);
+  const asrProfile = profiles.asr;
+  const ttsProfile = profiles.tts;
 
   const startConfig = useMemo<VoiceCallConfig>(() => ({
-    asrProviderId: template.asrProfileId,
-    llmProviderId: template.llmProfileId,
-    ttsProviderId: template.ttsProfileId,
+    asrProviderId: selection.asrProfileId,
+    llmProviderId: selection.llmProfileId,
+    ttsProviderId: selection.ttsProfileId,
     inputMode,
     maxSessionMinutes: DEFAULT_MAX_SESSION_MINUTES,
     defaultKnowledgePolicy: knowledgePolicy,
-  }), [template, inputMode, knowledgePolicy]);
+  }), [selection, inputMode, knowledgePolicy]);
 
   const handleStart = useCallback(async () => {
     setError(null);
@@ -116,6 +124,15 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
         )}
         <h1>语音主动回忆</h1>
         <span className="voice-recall-start__status">模板 {template.templateId}@{template.version} · {template.status}</span>
+        <button
+          type="button"
+          className="icon-button voice-recall-start__settings"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Provider 设置"
+          title="ASR / LLM / TTS 设置"
+        >
+          <Settings size={18} />
+        </button>
       </header>
 
       <section className="voice-recall-start__source">
@@ -207,7 +224,9 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
       <aside className="voice-recall-start__cost" aria-label="费用与时长">
         <div className="cost-row"><Clock size={16} /> <span>默认 {DEFAULT_MAX_SESSION_MINUTES} 分钟，软上限 {SOFT_CAP_MINUTES} 分钟</span></div>
         <div className="cost-row"><Info size={16} /> <span>{REMINDER_PERCENT}% 用量提醒，达软上限请求门控</span></div>
-        <div className="cost-row"><Mic size={16} /> <span>ASR/TTS：候选模板（未验证）；LLM：DeepSeek 流式</span></div>
+        <div className="cost-row"><Mic size={16} /> <span>ASR：{asrProfile?.providerName ?? selection.asrProfileId}（{asrProfile?.transport ?? "—"}）</span></div>
+        <div className="cost-row"><Mic size={16} /> <span>LLM：{selection.llmProfileId}（复用 AI 设置）</span></div>
+        <div className="cost-row"><Mic size={16} /> <span>TTS：{ttsProfile?.providerName ?? selection.ttsProfileId}（{ttsProfile?.transport ?? "—"}）</span></div>
       </aside>
 
       {error && <p className="voice-recall-start__error" role="alert">{error}</p>}
@@ -218,6 +237,12 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
         onClick={() => void handleStart()}
         disabled={busy}
       >开始通话</button>
+
+      <VoiceProviderSettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSelectionChanged={() => setSelection(getVoiceProviderSelection())}
+      />
 
       <style>{CSS}</style>
     </div>
