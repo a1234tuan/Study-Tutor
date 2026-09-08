@@ -222,6 +222,10 @@ const createRestoreDb = (podcasts: KnowledgePodcast[] = [], assets: Asset[] = [p
   cloudSyncMutation: new MemoryTable<StoredRow>([{ id: "local", epoch: 0 }]),
   restoreStagingAssets: new MemoryTable<StoredRow>([], "stagingId"),
   reviewAnnotationDrafts: new MemoryTable(),
+  // §15.1 voice-recall local-only stores（测试恢复路径的清除/保留行为）。
+  voiceRecallSessions: new MemoryTable(),
+  voiceRecallTurns: new MemoryTable(),
+  voiceRecallLocalHistory: new MemoryTable(),
   transaction: async (_mode: string, ...args: unknown[]) => {
     const callback = args.at(-1) as () => Promise<unknown>;
     return callback();
@@ -436,5 +440,43 @@ describe("DexieStorageAdapter cloud restore", () => {
     expect(restored).toMatchObject({ audioStatus: "idle", audioUnits: [{ audioStatus: "pending" }], segments: [{ audioStatus: "pending" }] });
     expect(restored.audioUnits?.[0].audioAssetId).toBeUndefined();
     expect(restored.segments[0].audioAssetId).toBeUndefined();
+  });
+
+  it("Phase 6 §15.1: full backup restore clears temporary voice sessions/turns but keeps local history", async () => {
+    vi.resetModules();
+    const fakeDb = createRestoreDb();
+    // 预置三类 local-only 数据。
+    await fakeDb.voiceRecallSessions.put({ id: "voice-session-1", status: "paused", updatedAt: stamp, sourceKind: "free-topic" });
+    await fakeDb.voiceRecallTurns.put({ id: "voice-turn-1", sessionId: "voice-session-1", sequence: 1, status: "displayed", updatedAt: stamp });
+    await fakeDb.voiceRecallLocalHistory.put({ id: "voice-history-1", savedAt: stamp, sourceKind: "free-topic", title: "比例原则", summary: "三子原则", sourceRefs: [] });
+    vi.doMock("../db/database", () => ({ db: fakeDb }));
+    const { DexieStorageAdapter } = await import("./storageAdapter");
+    const adapter = new DexieStorageAdapter();
+
+    await adapter.restoreSnapshot({ payload: { ...restorePayload, podcasts: [] }, assets: [] } as StorageSnapshot);
+
+    // 临时会话与轮次被清除（不可跨设备/跨备份迁移）。
+    expect((await fakeDb.voiceRecallSessions.toArray()).length).toBe(0);
+    expect((await fakeDb.voiceRecallTurns.toArray()).length).toBe(0);
+    // 本机通话历史保留——它是跨会话的本地归档，不属于"临时会话"。
+    expect((await fakeDb.voiceRecallLocalHistory.toArray()).length).toBe(1);
+  });
+
+  it("Phase 6 §15.1: cloud-pull restore preserves all voice-recall local-only data", async () => {
+    vi.resetModules();
+    const fakeDb = createRestoreDb();
+    await fakeDb.voiceRecallSessions.put({ id: "voice-session-1", status: "paused", updatedAt: stamp, sourceKind: "free-topic" });
+    await fakeDb.voiceRecallTurns.put({ id: "voice-turn-1", sessionId: "voice-session-1", sequence: 1, status: "displayed", updatedAt: stamp });
+    await fakeDb.voiceRecallLocalHistory.put({ id: "voice-history-1", savedAt: stamp, sourceKind: "free-topic", title: "比例原则", summary: "三子原则", sourceRefs: [] });
+    vi.doMock("../db/database", () => ({ db: fakeDb }));
+    const { DexieStorageAdapter } = await import("./storageAdapter");
+    const adapter = new DexieStorageAdapter();
+
+    await adapter.restoreCloudSyncSnapshot({ payload: { ...restorePayload, podcasts: [] }, assets: [] } as StorageSnapshot);
+
+    // 云拉取不碰任何 local-only store——用户本机通话态与历史完整保留。
+    expect((await fakeDb.voiceRecallSessions.toArray()).length).toBe(1);
+    expect((await fakeDb.voiceRecallTurns.toArray()).length).toBe(1);
+    expect((await fakeDb.voiceRecallLocalHistory.toArray()).length).toBe(1);
   });
 });

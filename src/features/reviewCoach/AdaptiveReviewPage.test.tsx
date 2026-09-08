@@ -45,4 +45,19 @@ describe("AdaptiveReviewPage", () => {
     await waitFor(() => expect(props.onFinishVerification).toHaveBeenCalledWith(coachTestTask.id, "decayed", undefined));
     expect(props.onFinish).not.toHaveBeenCalled();
   });
+
+  it("Phase 5: text submit carries answerInputMode=text and voice option is gated off (§5.1)", async () => {
+    const snapshot = completeCoachTestSnapshot();
+    snapshot.adaptiveReviewTasks[0] = { ...coachTestTask, status: "in-progress" };
+    snapshot.adaptiveQuizTurns[0] = { ...coachTestTurn, status: "displayed", answerText: undefined, answeredAt: undefined, assessment: undefined, assessmentRationale: undefined, hintsUsed: [] };
+    const onSubmitAnswer = vi.fn().mockResolvedValue(undefined);
+    render(<AdaptiveReviewPage {...props} onSubmitAnswer={onSubmitAnswer} snapshot={snapshot} />);
+    const voiceToggle = screen.getByRole("button", { name: "语音回答" });
+    // ASR 未就绪：语音选项禁用，文字为默认可正式提交路径。
+    expect(voiceToggle).toBeDisabled();
+    const textarea = screen.getByRole("textbox", { name: "你的回答" });
+    fireEvent.change(textarea, { target: { value: "right inclusive" } });
+    fireEvent.click(screen.getByRole("button", { name: /提交回答/ }));
+    await waitFor(() => expect(onSubmitAnswer).toHaveBeenCalledWith(coachTestTurn.id, "right inclusive", expect.objectContaining({ answerInputMode: "text" })));
+  });
 });

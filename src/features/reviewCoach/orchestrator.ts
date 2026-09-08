@@ -134,6 +134,10 @@ export interface SubmitQuizAnswerInput {
   policyVersion: string;
   operationId: string;
   signal?: AbortSignal;
+  /** Phase 5（§5.1）：回答输入方式。voice 表示来自语音复述转写；text 表示键盘输入。 */
+  answerInputMode?: "voice" | "text";
+  /** Phase 5：转写是否经用户编辑。仅 voice 模式有意义。 */
+  transcriptEdited?: boolean;
 }
 
 const priorityRank: Record<AdaptiveReviewTask["priorityTier"], number> = {
@@ -741,7 +745,18 @@ export class ReviewCoachOrchestrator {
     const criteria = new Set(turn.answerCriteria);
     if ([...evaluation.matchedCriteria, ...evaluation.missingCriteria].some((item) => !criteria.has(item))) throw new Error("回答判定引用了题目之外的判据。");
     const stamp = this.dependencies.clock.now();
-    const answered: AdaptiveQuizTurn = { ...turn, status: "answered", answerText, answeredAt: stamp, assessment: evaluation.assessment, assessmentRationale: evaluation.rationale, updatedAt: stamp };
+    const answered: AdaptiveQuizTurn = {
+      ...turn,
+      status: "answered",
+      answerText,
+      answeredAt: stamp,
+      assessment: evaluation.assessment,
+      assessmentRationale: evaluation.rationale,
+      // Phase 5 §5.1：记录输入方式与是否转写编辑；不含原始转写/置信度（留 schema 21 local-only）。
+      ...(input.answerInputMode ? { answerInputMode: input.answerInputMode } : {}),
+      ...(input.transcriptEdited ? { transcriptEdited: true } : {}),
+      updatedAt: stamp,
+    };
     const outcome: TaskOutcomeEvent = {
       id: this.dependencies.ids.next(), taskId: task.id, turnId: turn.id, decisionBlockId: task.decisionBlockId, recordId: task.recordId, contentVersion: task.contentVersion,
       kind: "answer-assessment", answerAssessment: evaluation.assessment, reason: evaluation.rationale, occurredAt: stamp,

@@ -7,6 +7,9 @@ import { cleanupNativeServiceWorker } from "./lib/nativeServiceWorker";
 import { isDesktopPlatform, isNativePlatform } from "./lib/platform";
 import { ReviewCoachPreviewApp } from "./preview/ReviewCoachPreviewApp";
 import { isUiV2PrototypeRequest, UiV2PrototypeApp } from "./preview/UiV2PrototypeApp";
+import { VoiceRecallPrototypeApp } from "./features/voiceRecall/VoiceRecallPrototypeApp";
+import { VoiceRecallStartPage } from "./features/voiceRecall/VoiceRecallStartPage";
+import { isVoiceStage0PreviewRequest, isVoiceStage3PreviewRequest } from "./preview/voiceRecallPreview";
 import { isJournalPerformancePreviewRequest, isReviewCoachPreviewRequest, isStage3PreviewRequest, isStage4PreviewRequest, isStage5PreviewRequest, isStage6PreviewRequest, isStage7PreviewRequest, seedJournalPerformancePreview, seedStage3Preview, seedStage4Preview, seedStage5Preview, seedStage6Preview, seedStage7Preview } from "./preview/stage3PreviewSeed";
 import "./styles.css";
 import "./styles/theme.css";
@@ -21,6 +24,24 @@ const startApplication = async () => {
     ReactDOM.createRoot(document.getElementById("root")!).render(
       <React.StrictMode>
         <UiV2PrototypeApp />
+      </React.StrictMode>,
+    );
+    return;
+  }
+  if (isVoiceStage0PreviewRequest()) {
+    ReactDOM.createRoot(document.getElementById("root")!).render(
+      <React.StrictMode>
+        <VoiceRecallPrototypeApp />
+      </React.StrictMode>,
+    );
+    return;
+  }
+  if (isVoiceStage3PreviewRequest()) {
+    ReactDOM.createRoot(document.getElementById("root")!).render(
+      <React.StrictMode>
+        <VoiceRecallStartPage
+          seedRecordTitles={["9月8日 · 法律学习", "9月7日 · 行政法原则"]}
+        />
       </React.StrictMode>,
     );
     return;

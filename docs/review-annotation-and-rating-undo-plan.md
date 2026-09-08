@@ -4,7 +4,7 @@
 
 - 状态：已复审并完成第一阶段实施与工具栏 UX 修复（2026-09-08）
 - 适用范围：间隔复习队列中的只读笔记卡片，以及 Today、Review、Journal、More 主导航页面的首屏信息密度
-- 当前数据库基线：schema 20，其中 `reviewAnnotationDrafts` 仅保存在设备本地
+- 当前数据库基线：schema 21。本方案涉及的 `reviewAnnotationDrafts` 在 schema 20 引入并仅保存在设备本地；schema 21 另行新增了与批注无关的 voice-recall local-only 表。
 - 目标平台：Web、Electron、Capacitor Android
 - 不在本方案范围：笔记编辑模式批注、批注云同步、批注导出、评分后批注恢复
 

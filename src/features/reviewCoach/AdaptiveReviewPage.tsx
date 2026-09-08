@@ -12,7 +12,8 @@ interface AdaptiveReviewPageProps {
   onBack: () => void;
   onGenerateTurn: (taskId: string) => Promise<unknown>;
   onRequestHint: (turnId: string, level: number) => Promise<unknown>;
-  onSubmitAnswer: (turnId: string, answer: string) => Promise<unknown>;
+  /** Phase 5 §5.1：回答输入方式与转写编辑标记。voice 表示来自语音复述转写；不传则按文字处理。 */
+  onSubmitAnswer: (turnId: string, answer: string, options?: { answerInputMode?: "voice" | "text"; transcriptEdited?: boolean }) => Promise<unknown>;
   onSkipTurn: (turnId: string) => Promise<unknown>;
   onReportInvalid: (turnId: string, reason: string) => Promise<unknown>;
   onFinish: (taskId: string, outcome: SubjectiveOutcome, reason?: string, confirmedConflict?: boolean) => Promise<unknown>;
@@ -37,6 +38,9 @@ export const AdaptiveReviewPage = ({ taskId, snapshot, records, onBack, onGenera
   const record = task ? records.find((item) => item.id === task.recordId) : undefined;
   const delayedVerification = task ? snapshot.delayedVerifications.find((item) => item.taskId === task.id) : undefined;
   const [answer, setAnswer] = useState("");
+  // Phase 5 §5.1：回答输入方式。voice 路径需 ASR Provider 就绪（Gate 1 之后补真接入）；当前仅文字可正式提交。
+  const [answerInputMode, setAnswerInputMode] = useState<"text" | "voice">("text");
+  const [transcriptEdited, setTranscriptEdited] = useState(false);
   const [busy, setBusy] = useState<string>();
   const [message, setMessage] = useState<string>();
   const [finishing, setFinishing] = useState(false);
@@ -127,9 +131,14 @@ export const AdaptiveReviewPage = ({ taskId, snapshot, records, onBack, onGenera
                   })}
                 </div>
               )}
-              <textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="写下你的回答..." aria-label="你的回答" rows={6} />
+              <div className="adaptive-review-input-mode" role="group" aria-label="回答输入方式">
+                <button type="button" className={answerInputMode === "text" ? "segmented__option segmented__option--active" : "segmented__option"} aria-pressed={answerInputMode === "text"} onClick={() => setAnswerInputMode("text")}>文字回答</button>
+                <button type="button" className={answerInputMode === "voice" ? "segmented__option segmented__option--active" : "segmented__option"} aria-pressed={answerInputMode === "voice"} disabled title="ASR Provider 接入后启用（Gate 1 之后）" onClick={() => setAnswerInputMode("voice")}>语音回答</button>
+                <span className="adaptive-review-input-mode__hint">{answerInputMode === "voice" ? "语音输入待 ASR 就绪后启用，暂以文字提交。" : ""}</span>
+              </div>
+              <textarea value={answer} onChange={(event) => { setAnswer(event.target.value); if (answerInputMode === "voice") setTranscriptEdited(true); }} placeholder="写下你的回答..." aria-label="你的回答" rows={6} />
               <div className="adaptive-review-primary-actions">
-                <button type="button" className="primary-button" disabled={!answer.trim() || Boolean(busy)} onClick={() => void run("answer", () => onSubmitAnswer(currentTurn.id, answer))}>{busy === "answer" ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}提交回答</button>
+                <button type="button" className="primary-button" disabled={!answer.trim() || Boolean(busy)} onClick={() => void run("answer", () => onSubmitAnswer(currentTurn.id, answer, { answerInputMode: answerInputMode, ...(answerInputMode === "voice" && transcriptEdited ? { transcriptEdited: true } : {}) }))}>{busy === "answer" ? <LoaderCircle className="spin" size={17} /> : <Send size={17} />}提交回答</button>
                 <button type="button" disabled={Boolean(busy)} onClick={() => void run("skip", () => onSkipTurn(currentTurn.id))}>跳过本题</button>
                 <button type="button" disabled={Boolean(busy)} onClick={() => setShowInvalid(true)}><Flag size={16} />题目有问题</button>
               </div>

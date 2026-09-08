@@ -565,10 +565,11 @@ export const useAppData = () => {
     return result;
   }, [refresh]);
 
-  const submitAdaptiveQuizAnswer = useCallback(async (turnId: string, answerText: string) => {
+  const submitAdaptiveQuizAnswer = useCallback(async (turnId: string, answerText: string, options?: { answerInputMode?: "voice" | "text"; transcriptEdited?: boolean }) => {
     const { provider, orchestrator } = await createQuizOrchestrator();
     try {
-      return await orchestrator.submitQuizAnswer({ turnId, answerText, provider: provider.providerName, model: provider.model, promptVersion: defaultQuizExecutionMetadata.answerEvaluationPromptVersion, policyVersion: defaultQuizExecutionMetadata.policyVersion, operationId: newId() });
+      // Phase 5 §5.1：把语音/文字输入方式与转写编辑标记透传到正式提交。仅元数据；原始转写/置信度不入正式事实。
+      return await orchestrator.submitQuizAnswer({ turnId, answerText, provider: provider.providerName, model: provider.model, promptVersion: defaultQuizExecutionMetadata.answerEvaluationPromptVersion, policyVersion: defaultQuizExecutionMetadata.policyVersion, operationId: newId(), ...(options?.answerInputMode ? { answerInputMode: options.answerInputMode } : {}), ...(options?.transcriptEdited ? { transcriptEdited: true } : {}) });
     } finally {
       await refresh();
       await markAutoBackupDirty("review-coach-quiz-answer");

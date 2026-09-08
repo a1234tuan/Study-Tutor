@@ -84,6 +84,24 @@ export const REVIEW_ANNOTATION_SCHEMA_20_STORES = {
   reviewAnnotationDrafts: "id, recordId, [recordId+reviewOccurrenceKey], pendingClear, updatedAt",
 } as const;
 
+/**
+ * schema 21：语音复述三张 local-only store（docs/realtime-voice-recall-design.md §15.1）。
+ *
+ * 这三个 store 不加入 CloudSyncEntityType，不进入 Firebase、ZIP、流式/native backup、
+ * 知识导出或记录转移；写入时不得标记 cloud mutation。schema 20 已由 reviewAnnotationDrafts
+ * 使用，因此新本机表改用 schema 21，不复用已发布版本。
+ *
+ * - voiceRecallSessions：可恢复临时检查点（入口来源、范围引用、状态、Provider 非敏感元数据、结构化记忆、检查点）。
+ * - voiceRecallTurns：轮次数据（问题、最终转写、整理文本、播放完成范围、错误状态）；sequence 单调递增且不得复用。
+ * - voiceRecallLocalHistory：用户主动保留的本机通话历史（标题、摘要、来源引用、本机估算用量）。
+ */
+export const VOICE_RECALL_SCHEMA_21_STORES = {
+  ...REVIEW_ANNOTATION_SCHEMA_20_STORES,
+  voiceRecallSessions: "id, status, updatedAt, sourceKind",
+  voiceRecallTurns: "id, sessionId, [sessionId+sequence], status, updatedAt",
+  voiceRecallLocalHistory: "id, savedAt, sourceKind",
+} as const;
+
 const tableRows = async <T>(transaction: Transaction, name: string): Promise<T[]> => {
   if (!transaction.db.tables.some((table) => table.name === name)) return [];
   return transaction.table<T, string>(name).toArray();

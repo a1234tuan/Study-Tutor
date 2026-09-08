@@ -28,6 +28,8 @@ interface AiKnowledgeScopePickerProps {
   assets: Asset[];
   initialScope?: AiKnowledgeScope;
   includeDate?: boolean;
+  /** 至少选择几条日志（默认 2；语音复述范围会话传 1）。 */
+  minSelectedRecords?: number;
   eyebrow?: string;
   title: string;
   ariaLabel?: string;
@@ -54,6 +56,7 @@ export const AiKnowledgeScopePicker = ({
   assets,
   initialScope,
   includeDate = false,
+  minSelectedRecords = MIN_SELECTED_SCOPE_RECORDS,
   eyebrow = "Knowledge Base",
   title,
   ariaLabel = title,
@@ -191,7 +194,7 @@ export const AiKnowledgeScopePicker = ({
   const scopeUnavailableReason = (() => {
     if (scopeKind === "tag" && scopeSubjects.length === 0) return "没有可用学科，请先保存正式日志。";
     if (scopeKind === "tag" && scopeTags.length === 0) return "该学科没有已保存标签。";
-    if (scopeKind === "records" && selectedRecordCount < MIN_SELECTED_SCOPE_RECORDS) return `请至少选择 ${MIN_SELECTED_SCOPE_RECORDS} 条日志。`;
+    if (scopeKind === "records" && selectedRecordCount < minSelectedRecords) return `请至少选择 ${minSelectedRecords} 条日志。`;
     if (!pendingScope) return "请选择完整的知识范围。";
     if (pendingScopeRecords.length === 0) return "当前范围没有命中可用日志。";
     return "";
@@ -269,7 +272,7 @@ export const AiKnowledgeScopePicker = ({
           ) : (
             <div className="ai-scope-record-picker">
               <label className="search-box ai-scope-record-search"><Search size={18} /><input value={desktop ? recordSearchInput : recordTitleQuery} onCompositionStart={() => { if (desktop) recordSearchComposingRef.current = true; }} onCompositionEnd={(event) => { if (!desktop) return; recordSearchComposingRef.current = false; setRecordSearchInput(event.currentTarget.value); setRecordTitleQuery(event.currentTarget.value); }} onChange={(event) => { const value = event.target.value; if (!desktop) { setRecordTitleQuery(value); return; } setRecordSearchInput(value); if (!(event.nativeEvent as InputEvent).isComposing && !recordSearchComposingRef.current) setRecordTitleQuery(value); }} placeholder="按日志标题搜索" aria-label="按日志标题搜索" /></label>
-              <div className="ai-scope-selection-status" role="status"><strong>已选 {selectedRecordCount}/{MAX_SELECTED_SCOPE_RECORDS} 条日志</strong><span>{selectedRecordCount < MIN_SELECTED_SCOPE_RECORDS ? `还需选择 ${MIN_SELECTED_SCOPE_RECORDS - selectedRecordCount} 条` : "可跨学科选择，最多 10 条"}</span></div>
+              <div className="ai-scope-selection-status" role="status"><strong>已选 {selectedRecordCount}/{MAX_SELECTED_SCOPE_RECORDS} 条日志</strong><span>{selectedRecordCount < minSelectedRecords ? `还需选择 ${minSelectedRecords - selectedRecordCount} 条` : "可跨学科选择，最多 10 条"}</span></div>
               <div className="ai-scope-record-list" aria-label="可选日志">
                 {searchingRecordTitles && <p className="status-message">正在搜索标题…</p>}
                 {hasMoreRecordTitleResults && <p className="status-message">结果较多，仅显示前 {RECORD_SEARCH_RESULT_LIMIT} 条，请缩小关键词。</p>}

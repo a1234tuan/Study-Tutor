@@ -2052,7 +2052,7 @@ export class DexieStorageAdapter implements StorageAdapter {
   private async restoreSnapshotData(
     snapshot: StorageSnapshot,
     expectedEpoch?: number,
-    options: { preservePodcasts?: boolean; preserveLocalSettings?: boolean; clearLocalAnnotationDrafts?: boolean } = {},
+    options: { preservePodcasts?: boolean; preserveLocalSettings?: boolean; clearLocalAnnotationDrafts?: boolean; preserveVoiceRecallSessions?: boolean } = {},
   ): Promise<void> {
     const restoredBlocks = normalizeSnapshotRecords(migrateBlocksToRecords(snapshot.payload.blocks));
     const restoredDrafts = normalizeSnapshotRecordDrafts(snapshot.payload.recordDrafts ?? snapshot.recordDrafts ?? []);
@@ -2081,6 +2081,9 @@ export class DexieStorageAdapter implements StorageAdapter {
         db.knowledgePodcasts,
         db.cloudSyncMutation,
         db.reviewAnnotationDrafts,
+        // §15.1：完整恢复清除临时语音会话/轮次（不可跨设备迁移），但 voiceRecallLocalHistory 永不在恢复路径清除。
+        db.voiceRecallSessions,
+        db.voiceRecallTurns,
         ...reviewCoachRestoreTables(db),
       ],
       async () => {
@@ -2122,6 +2125,9 @@ export class DexieStorageAdapter implements StorageAdapter {
           db.assets.clear(),
           db.knowledgePodcasts.clear(),
           ...(options.clearLocalAnnotationDrafts ? [db.reviewAnnotationDrafts.clear()] : []),
+          // §15.1：完整备份恢复清除临时语音会话/轮次；云拉取（preserveVoiceRecallSessions）保留用户本机通话态。
+          // voiceRecallLocalHistory 始终保留——它是跨会话本机历史，不属于"临时会话"。
+          ...(options.preserveVoiceRecallSessions ? [] : [db.voiceRecallSessions.clear(), db.voiceRecallTurns.clear()]),
         ]);
         await restoreReviewCoachFormalSnapshot(db, restoredReviewCoach);
         await Promise.all([
@@ -2151,11 +2157,11 @@ export class DexieStorageAdapter implements StorageAdapter {
   }
 
   async restoreCloudSyncSnapshot(snapshot: StorageSnapshot): Promise<void> {
-    await this.restoreSnapshotData(snapshot, undefined, { preservePodcasts: true, preserveLocalSettings: true });
+    await this.restoreSnapshotData(snapshot, undefined, { preservePodcasts: true, preserveLocalSettings: true, preserveVoiceRecallSessions: true });
   }
 
   async restoreCloudSyncSnapshotIfUnchanged(snapshot: StorageSnapshot, expectedEpoch: number): Promise<void> {
-    await this.restoreSnapshotData(snapshot, expectedEpoch, { preservePodcasts: true, preserveLocalSettings: true });
+    await this.restoreSnapshotData(snapshot, expectedEpoch, { preservePodcasts: true, preserveLocalSettings: true, preserveVoiceRecallSessions: true });
   }
 
   async restoreStreamableSnapshot(
@@ -2196,12 +2202,14 @@ export class DexieStorageAdapter implements StorageAdapter {
       await markCloudSyncMutation();
       await db.transaction(
         "rw",
-        [db.entries, db.blocks, db.templates, db.recordDrafts, db.recordReviews, db.recordReviewLogs, db.recordReviewDayStats, db.mistakes, db.tags, db.reviews, db.studySessions, db.settings, db.assets, db.knowledgePodcasts, db.restoreStagingAssets, db.reviewAnnotationDrafts, ...reviewCoachRestoreTables(db)],
+        [db.entries, db.blocks, db.templates, db.recordDrafts, db.recordReviews, db.recordReviewLogs, db.recordReviewDayStats, db.mistakes, db.tags, db.reviews, db.studySessions, db.settings, db.assets, db.knowledgePodcasts, db.restoreStagingAssets, db.reviewAnnotationDrafts, db.voiceRecallSessions, db.voiceRecallTurns, ...reviewCoachRestoreTables(db)],
         async () => {
           await Promise.all([
             db.entries.clear(), db.blocks.clear(), db.templates.clear(), db.recordDrafts.clear(), db.recordReviews.clear(), db.recordReviewLogs.clear(),
             db.recordReviewDayStats.clear(), db.mistakes.clear(), db.tags.clear(), db.reviews.clear(), db.studySessions.clear(),
             db.settings.clear(), db.assets.clear(), db.knowledgePodcasts.clear(), db.reviewAnnotationDrafts.clear(),
+            // §15.1：流式完整恢复同样清除临时语音会话/轮次；voiceRecallLocalHistory 保留。
+            db.voiceRecallSessions.clear(), db.voiceRecallTurns.clear(),
           ]);
           await restoreReviewCoachFormalSnapshot(db, restoredReviewCoach);
           await Promise.all([

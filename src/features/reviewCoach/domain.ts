@@ -258,6 +258,14 @@ export interface AdaptiveQuizTurn extends CoachBaseEntity, VersionedDecisionBloc
   answeredAt?: CoachIsoDateTime;
   assessment?: ImmediateAnswerAssessment;
   assessmentRationale?: string;
+  /**
+   * Phase 5 语音接入正式字段（§5.1）：回答输入方式。仅记录"如何作答"，不含转写正文——
+   * ASR 原始转写/置信度/Provider 只存 schema 21 local-only 的 VoiceRecallTurnLocal。
+   * 提交后不得覆盖；追问创建 sequence 递增的新 AdaptiveQuizTurn。
+   */
+  answerInputMode?: "voice" | "text";
+  /** Phase 5：转写是否经用户编辑（voice 回答且整理后改动时为 true）。提交后不可改。 */
+  transcriptEdited?: boolean;
   qualityChecked: boolean;
   qualityModel?: string;
   generationModel: string;

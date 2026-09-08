@@ -7,6 +7,7 @@ export type UiErrorContext =
   | "record-save"
   | "ai-request"
   | "cloud-sync"
+  | "voice-recall"
   | "generic";
 
 export interface UiError {
@@ -23,6 +24,7 @@ const CONTEXT_MESSAGES: Record<UiErrorContext, string> = {
   "record-save": "保存失败。内容已存于本机草稿，请重试。",
   "ai-request": "AI 暂时无法完成本次请求。你的提问已保留，可以重试。",
   "cloud-sync": "云同步未完成。请检查网络后重试，本机数据不会因此删除。",
+  "voice-recall": "语音复述暂时遇到问题，已保留当前转写与会话。可切换为文字模式或重试。",
   generic: "操作没有完成，请稍后重试。",
 };
 
