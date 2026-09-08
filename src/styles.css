@@ -3119,6 +3119,146 @@ button:disabled {
   color: var(--muted);
 }
 
+/* 语音复述起始页与 Provider 设置抽屉（复用 surface-card / ai-image-mode-options 等卡片基底，
+   仅在此补充页面级布局与状态药丸、技术详情折叠、外发清单行；颜色一律走 --color-* 主题 token）。 */
+.voice-recall-start-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* 起始页主输入区：低摩擦，只有主题框 + 开始按钮 + 一行小结。 */
+.voice-recall-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(16px, 4vw, 22px);
+}
+.voice-recall-hero__label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.voice-recall-hero__textarea {
+  resize: vertical;
+  min-height: 84px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 8px);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.6;
+}
+.voice-recall-hero__textarea:focus-visible {
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 1px;
+}
+.voice-recall-hero__start {
+  min-height: 48px;
+  font-size: 16px;
+  justify-content: center;
+}
+.voice-recall-hero__summary {
+  margin: 0;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.voice-recall-advanced {
+  margin: 0;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+.voice-recall-advanced[open] { padding-bottom: 4px; }
+
+.voice-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-muted) 40%, transparent);
+  background: color-mix(in srgb, var(--color-muted) 12%, transparent);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.voice-status-pill::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.voice-status-pill.ok {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+}
+.voice-status-pill.warn {
+  border-color: color-mix(in srgb, var(--color-accent) 38%, transparent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+.voice-status-pill.info {
+  border-color: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  color: var(--color-primary-strong);
+}
+
+.voice-tech-details {
+  margin-top: 10px;
+  border-top: 1px dashed var(--color-border);
+  padding-top: 8px;
+}
+.voice-tech-details > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.voice-tech-details > summary::-webkit-details-marker { display: none; }
+.voice-tech-details > summary::after {
+  content: "▸";
+  transition: transform var(--motion-fast, 120ms) ease;
+}
+.voice-tech-details[open] > summary::after { transform: rotate(90deg); }
+.voice-tech-details dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.voice-tech-details dt { color: var(--color-muted); }
+.voice-tech-details dd { margin: 0; word-break: break-all; font-family: var(--font-code, monospace); font-size: 11px; }
+
+.voice-egress-list {
+  display: grid;
+  gap: 8px;
+}
+.voice-egress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control, 8px);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+}
+.voice-egress-row > div { min-width: 0; display: grid; gap: 2px; }
+.voice-egress-row strong { font-size: 13px; }
+.voice-egress-row small { color: var(--color-muted); font-size: 12px; }
+
 .preset-editor-card {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr) 38px;

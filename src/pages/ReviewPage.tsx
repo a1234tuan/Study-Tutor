@@ -6,6 +6,7 @@
   Edit3,
   Eye,
   MessageSquare,
+  Mic,
   MoreHorizontal,
   PauseCircle,
   PlusCircle,
@@ -70,6 +71,7 @@ interface ReviewPageProps {
   reviewProgress?: ReviewSessionProgress;
   libraryState: ReviewLibraryState;
   onModeChange: (mode: ReviewMode) => void;
+  onOpenVoiceRecall?: () => void;
   onQueueChange: (ids: string[]) => void;
   onCurrentRecordChange: (id?: string) => void;
   onReviewProgressChange?: (progress?: ReviewSessionProgress) => void;
@@ -272,6 +274,7 @@ export const ReviewPage = ({
   reviewProgress,
   libraryState,
   onModeChange,
+  onOpenVoiceRecall,
   onQueueChange,
   onCurrentRecordChange,
   onReviewProgressChange,
@@ -820,6 +823,11 @@ export const ReviewPage = ({
         className="review-page-header"
         actions={(
           <div className="review-header-menu" ref={headerMenuRef}>
+            {!coachOpen && onOpenVoiceRecall && (
+              <button type="button" className="secondary-button review-voice-recall" onClick={onOpenVoiceRecall} title="语音复述：和 AI 教练语音对话">
+                <Mic size={16} />语音复述
+              </button>
+            )}
             {!coachOpen && mode === "queue" && currentRecord && (
               <button type="button" className="secondary-button review-direct-edit" onClick={() => onEditRecord(currentRecord)}>
                 <Edit3 size={16} />编辑

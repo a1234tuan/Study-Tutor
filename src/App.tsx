@@ -24,6 +24,7 @@ import { CategoriesPage } from "./pages/CategoriesPage";
 import { SearchPage } from "./pages/SearchPage";
 import { RecordingsPage } from "./pages/RecordingsPage";
 import { ReviewPage } from "./pages/ReviewPage";
+import { VoiceRecallStartPage } from "./features/voiceRecall/VoiceRecallStartPage";
 import { StatsPage } from "./pages/StatsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { RecordEditorPage } from "./pages/RecordEditorPage";
@@ -1012,6 +1013,9 @@ export const App = () => {
         return <PodcastTemplatesPage settings={settings} onChanged={app.refresh} />;
       case "guide":
         return <UsageGuidePage />;
+      case "voiceRecall":
+        // §4.3：语音复述归属「复习」域，结束后回到复习首页（不论从复习页还是更多入口进入）。
+        return <VoiceRecallStartPage onBack={() => switchTab("review")} />;
       case "ai":
         return (
           <AiChatPage
@@ -1070,6 +1074,7 @@ export const App = () => {
             onOpenTemplates={() => openMoreSubRoute("templates")}
             onOpenCategories={() => switchTab("categories")}
             onOpenGuide={() => openMoreSubRoute("guide")}
+            onOpenVoiceRecall={() => openMoreSubRoute("voiceRecall")}
             settings={settings}
             autoBackupState={app.autoBackupState ?? undefined}
           />
@@ -1310,6 +1315,7 @@ export const App = () => {
                   },
               )
             }
+            onOpenVoiceRecall={() => openMoreSubRoute("voiceRecall")}
             onQueueChange={(queueIds) =>
               updateNavigationState((current) =>
                 sameIds(current.tabMemory.review.queueIds, queueIds)

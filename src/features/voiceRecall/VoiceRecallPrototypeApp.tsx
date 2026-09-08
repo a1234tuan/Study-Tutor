@@ -37,6 +37,11 @@ const END_PANEL_OPTIONS: EndPanelOption[] = [
   { key: "continue", label: "继续通话" },
 ];
 
+export interface VoiceRecallPrototypeAppProps {
+  /** 结束/暂停离开通话后返回来源页（起始页）。未提供时停留在 idle。 */
+  onExit?: () => void;
+}
+
 const STATUS_LABEL: Record<VoiceCallState, string> = {
   idle: "未开始",
   preflight: "通话前检查",
@@ -66,7 +71,7 @@ const buildSilenceAudioInput = async function* (): AsyncGenerator<VoiceAudioFram
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => globalThis.setTimeout(resolve, ms));
 
-export const VoiceRecallPrototypeApp = () => {
+export const VoiceRecallPrototypeApp = ({ onExit }: VoiceRecallPrototypeAppProps) => {
   const [callState, setCallState] = useState<VoiceCallState>("idle");
   const [inputMode, setInputMode] = useState<InputMode>("auto-half-duplex");
   const [userMuted, setUserMuted] = useState(false);
@@ -199,8 +204,13 @@ export const VoiceRecallPrototypeApp = () => {
   }, []);
 
   const requestEnd = useCallback(() => {
+    // idle 时直接返回来源页；通话中先弹结束确认面板。
+    if (callState === "idle") {
+      onExit?.();
+      return;
+    }
     setShowEndPanel(true);
-  }, []);
+  }, [callState, onExit]);
 
   const handleEndPanel = useCallback(
     (option: EndPanelOption["key"]) => {
@@ -217,8 +227,10 @@ export const VoiceRecallPrototypeApp = () => {
         apply("start-ending");
         apply("ended");
       }
+      // 两种离开都返回来源页（起始页），修复「进通话后回不来」。
+      onExit?.();
     },
-    [apply],
+    [apply, onExit],
   );
 
   const mainButton = useMemo<{ label: string; onClick: () => void; disabled?: boolean }>(() => {
@@ -435,6 +447,7 @@ const CSS = `
   --vr-fab-bg:linear-gradient(180deg,#7c8bff,#5a6bf0); --vr-fab-ring:rgba(107,122,255,.6);
   --vr-danger:#ef5a6f;
   position:fixed;inset:0;display:flex;flex-direction:column;
+  z-index:200; /* 整合进主应用时盖住侧栏/顶栏，保证通话页返回按钮可达，避免被遮挡致「卡死」 */
   background:radial-gradient(120% 80% at 50% 18%,var(--vr-bg-2),var(--vr-bg-1) 70%);
   color:var(--vr-text);font-family:var(--font-ui);font-size:17px;overflow:hidden;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);

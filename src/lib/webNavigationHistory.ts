@@ -46,6 +46,7 @@ const MORE_SUB_ROUTES: readonly MoreSubRoute[] = [
   "recordings",
   "podcasts",
   "guide",
+  "voiceRecall",
   null,
 ];
 const REVIEW_CARD_FILTERS: readonly ReviewCardFilter[] = ["all", "unadded", "new", "due", "learning", "suspended", "mastered"];

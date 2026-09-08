@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, BrainCircuit, Download, FileText, Headphones, Layers3, LayoutTemplate, Mic2, Settings, Trash2 } from "lucide-react";
+import { BarChart3, BookOpen, BrainCircuit, Download, FileText, Headphones, Layers3, LayoutTemplate, Mic, Mic2, Settings, Trash2 } from "lucide-react";
 
 import type { AppSettings, AutoBackupSettings } from "../types";
 import { createDefaultAiPresets } from "../db/defaults";
@@ -18,6 +18,7 @@ interface MorePageProps {
   onOpenTemplates: () => void;
   onOpenCategories: () => void;
   onOpenGuide: () => void;
+  onOpenVoiceRecall?: () => void;
   settings: AppSettings;
   autoBackupState?: AutoBackupSettings;
 }
@@ -62,6 +63,7 @@ export const MorePage = ({
   onOpenTemplates,
   onOpenCategories,
   onOpenGuide,
+  onOpenVoiceRecall = () => undefined,
   settings,
   autoBackupState,
 }: MorePageProps) => (
@@ -83,6 +85,13 @@ export const MorePage = ({
           description="直接进入 AI 问答界面"
           meta={buildAiMeta(settings)}
           onClick={onOpenAi}
+        />
+        <ListRow
+          className="more-summary-row"
+          icon={<Mic size={19} />}
+          title="语音复述"
+          description="和 AI 教练语音对话，做闭卷复述和主动回忆"
+          onClick={onOpenVoiceRecall}
         />
         <ListRow
           className="more-summary-row"
