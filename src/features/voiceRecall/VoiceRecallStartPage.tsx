@@ -124,7 +124,7 @@ export const VoiceRecallStartPage = ({ onPersistSession, onBack, seedRecordTitle
   }, [tab, freeTopic, startConfig, knowledgePolicy, seedRecordTitles, onPersistSession]);
 
   if (startedSessionId) {
-    return <VoiceRecallPrototypeApp />;
+    return <VoiceRecallPrototypeApp onExit={() => setStartedSessionId(null)} />;
   }
 
   return (
